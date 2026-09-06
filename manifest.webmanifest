@@ -1,0 +1,10 @@
+{
+  "name": "AFTER SIGNAL — o que sobrou no ar",
+  "short_name": "AFTER SIGNAL",
+  "description": "Uma rede paralela de rádios ao vivo. Sem algoritmo, sem feed, sem dono.",
+  "start_url": "./", "scope": "./", "display": "standalone", "orientation": "any",
+  "background_color": "#050408", "theme_color": "#050408",
+  "icons": [
+    {"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}
+  ]
+}

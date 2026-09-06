@@ -1,0 +1,63 @@
+AFTER SIGNAL
+Copyright © 2026 Douglas Karnoski. Todos os direitos reservados.
+https://github.com/douglaskarnoski-cpu
+
+------------------------------------------------------------------------
+LICENÇA DE USO
+------------------------------------------------------------------------
+
+Este software é de autoria e propriedade de Douglas Karnoski.
+
+1. O QUE VOCÊ PODE FAZER, LIVREMENTE E SEM PEDIR NADA
+
+   a) Baixar, instalar e executar este software em quantos computadores
+      ou dispositivos quiser.
+   b) Usá-lo para qualquer finalidade, inclusive profissional ou
+      comercial, dentro da sua própria atividade.
+   c) Acessar a rede pública que ele utiliza, transmitir, conversar,
+      publicar a sua própria rádio e ver outras pessoas conectadas.
+   d) Estudar o código-fonte, que é aberto à leitura.
+   e) Fazer cópias e modificações para uso estritamente pessoal e
+      privado, sem publicá-las nem distribuí-las.
+
+   Este uso é gratuito, perpétuo e não exige registro, pagamento ou
+   autorização.
+
+2. O QUE EXIGE AUTORIZAÇÃO ESCRITA DO AUTOR
+
+   a) Redistribuir o software, no todo ou em parte, modificado ou não.
+   b) Publicar obras derivadas, forks públicos ou versões renomeadas.
+   c) Vender, licenciar, sublicenciar ou alugar o software.
+   d) Remover, ocultar ou alterar os avisos de autoria.
+   e) Usar o nome "AFTER SIGNAL" para identificar outro produto.
+
+3. RESERVA DE DIREITOS
+
+   Todos os direitos não concedidos expressamente acima permanecem com o
+   autor, incluindo os direitos morais e patrimoniais previstos na Lei
+   9.610/1998 (Direitos Autorais) e na Lei 9.609/1998 (Programas de
+   Computador).
+
+4. COMPONENTES DE TERCEIROS
+
+   Esta licença cobre apenas o código escrito pelo autor. As bibliotecas,
+   dados, fontes e serviços de terceiros usados pelo software têm suas
+   próprias licenças, listadas em CREDITS.md, e continuam regidos por
+   elas.
+
+5. AUSÊNCIA DE GARANTIA
+
+   O software é fornecido "COMO ESTÁ", sem garantia de qualquer espécie,
+   expressa ou implícita. O autor não se responsabiliza por qualquer dano
+   decorrente do uso. O software depende de serviços de terceiros que
+   podem mudar ou sair do ar a qualquer momento.
+
+6. CONTEÚDO DE TERCEIROS
+
+   As transmissões de rádio e as mensagens trocadas na rede são de
+   responsabilidade de quem as emite. O autor não hospeda, não modera e
+   não controla esse conteúdo.
+
+------------------------------------------------------------------------
+Para pedir autorização de redistribuição ou uso comercial do próprio
+software, procure o autor em github.com/douglaskarnoski-cpu.

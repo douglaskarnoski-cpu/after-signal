@@ -1,0 +1,3035 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AFTER SIGNAL — o que sobrou no ar</title>
+<meta name="description" content="Uma rede paralela de rádios ao vivo. Sem algoritmo, sem feed, sem dono.">
+<meta name="theme-color" content="#050408">
+<meta name="author" content="Douglas Karnoski">
+<meta property="og:title" content="AFTER SIGNAL">
+<meta property="og:description" content="Uma rede paralela de rádios ao vivo. Sem algoritmo, sem feed, sem dono.">
+<meta property="og:image" content="icon.svg">
+<meta property="og:type" content="website">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Monoton&family=Share+Tech+Mono&family=Space+Grotesk:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root{
+    --bg:#050408; --bg2:#0a0810; --bg3:#100c18; --bg4:#171122;
+    --line:#221a33; --line2:#33264d;
+    --tx:#e8e2f0; --tx2:#9990ad; --tx3:#655c7a;
+    --amber:#ffa53d; --amber2:#ffc978;
+    --mag:#ff3d8b; --cyan:#3df0ff; --mint:#6dff9e; --violet:#a86bff;
+    --glow:rgba(255,165,61,.20); --mglow:rgba(109,255,158,.20);
+    --disp:"Monoton","Impact","Haettenschweiler","Arial Narrow Bold",system-ui,sans-serif;
+    --mono:"Share Tech Mono",ui-monospace,Consolas,monospace;
+    --sans:"Space Grotesk",ui-sans-serif,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--tx);font-family:var(--sans);overflow:hidden;
+       -webkit-font-smoothing:antialiased}
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+  input,select,textarea{font:inherit;color:inherit}
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-thumb{background:var(--line2);border-radius:8px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::selection{background:var(--mag);color:#fff}
+
+  /* ---------- grão + scanlines (a "textura de transmissão") ---------- */
+  #grain,#scan{position:fixed;inset:0;pointer-events:none;z-index:9000}
+  #grain{opacity:.055;mix-blend-mode:screen;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+    animation:grainshift .9s steps(3) infinite}
+  @keyframes grainshift{0%{transform:translate(0,0)}33%{transform:translate(-3px,2px)}66%{transform:translate(2px,-3px)}}
+  #scan{opacity:.30;background:repeating-linear-gradient(to bottom,
+    rgba(255,255,255,.030) 0px, rgba(255,255,255,.030) 1px, transparent 1px, transparent 3px)}
+
+  /* ---------- layout ---------- */
+  #app{position:fixed;inset:0;display:grid;grid-template-rows:auto 1fr auto;grid-template-columns:1fr auto}
+  #top{grid-column:1/3;display:flex;align-items:center;gap:12px;padding:9px 16px;
+       background:linear-gradient(180deg,#0d0916,#050408);border-bottom:1px solid var(--line);z-index:1200}
+  #map{grid-column:1;grid-row:2;background:#050408}
+  #side{grid-column:2;grid-row:2;width:378px;background:var(--bg2);border-left:1px solid var(--line);
+        display:flex;flex-direction:column;overflow:hidden;transition:width .22s ease}
+  #side.collapsed{width:0;border-left:none}
+  #player{grid-column:1/3;grid-row:3;border-top:1px solid var(--line);
+          background:linear-gradient(180deg,#0c0914,#050408)}
+
+  /* ---------- marca ---------- */
+  .brand{display:flex;flex-direction:column;line-height:1;user-select:none;flex:none}
+  .brand b{font-family:var(--disp);font-size:17px;font-weight:400;letter-spacing:.045em;color:var(--amber);
+    text-shadow:-1.5px 0 rgba(255,61,139,.55), 1.5px 0 rgba(61,240,255,.45), 0 0 22px rgba(255,165,61,.35);
+    animation:chroma 7s infinite}
+  @keyframes chroma{
+    0%,92%,100%{text-shadow:-1.5px 0 rgba(255,61,139,.55),1.5px 0 rgba(61,240,255,.45),0 0 22px rgba(255,165,61,.35)}
+    94%{text-shadow:-4px 0 rgba(255,61,139,.8),4px 0 rgba(61,240,255,.7),0 0 26px rgba(255,165,61,.5);transform:translateX(1px)}
+    96%{text-shadow:3px 0 rgba(255,61,139,.7),-3px 0 rgba(61,240,255,.6),0 0 26px rgba(255,165,61,.5);transform:translateX(-1px)}
+  }
+  .brand span{font-family:var(--mono);font-size:8.5px;color:var(--tx3);letter-spacing:.30em;
+    text-transform:uppercase;margin-top:3px}
+
+  /* ---------- controles do topo ---------- */
+  .search{flex:1;max-width:330px;position:relative}
+  .search input{width:100%;padding:8px 12px 8px 32px;background:var(--bg3);border:1px solid var(--line);
+    border-radius:3px;color:var(--tx);outline:none;font-size:13px;font-family:var(--mono)}
+  .search input:focus{border-color:var(--amber);box-shadow:0 0 0 1px var(--glow),0 0 18px var(--glow)}
+  .search svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);opacity:.4}
+  .chip{padding:6px 10px;border:1px solid var(--line);border-radius:3px;font-size:11px;color:var(--tx2);
+    background:var(--bg3);white-space:nowrap;transition:.15s;font-family:var(--mono);letter-spacing:.05em;
+    text-transform:uppercase}
+  .chip:hover{border-color:var(--line2);color:var(--tx)}
+  .chip.on{border-color:var(--amber);color:var(--amber);background:rgba(255,165,61,.10);
+    box-shadow:0 0 14px rgba(255,165,61,.14)}
+  .chip.mint.on{border-color:var(--mint);color:var(--mint);background:rgba(109,255,158,.10);
+    box-shadow:0 0 14px rgba(109,255,158,.14)}
+  .chip.mag.on{border-color:var(--mag);color:var(--mag);background:rgba(255,61,139,.10);
+    box-shadow:0 0 14px rgba(255,61,139,.14)}
+  #status{font-size:10.5px;color:var(--tx3);font-family:var(--mono);min-width:96px;text-align:right;
+    letter-spacing:.04em}
+  .legend{display:flex;align-items:center;gap:9px;font-size:9.5px;color:var(--tx3);font-family:var(--mono);
+    letter-spacing:.06em;text-transform:uppercase}
+  .legend i{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:middle}
+
+  /* sinal dos relays */
+  #counters{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;
+    color:var(--tx3);letter-spacing:.05em;padding:5px 9px;border:1px solid var(--line);border-radius:3px;
+    background:var(--bg3);white-space:nowrap}
+  #counters span{color:var(--cyan);font-size:12px}
+  #counters #cntSeen{color:var(--violet)}
+  #counters em{font-style:normal;text-transform:uppercase}
+  #counters .sep{color:var(--line2)}
+  #signal{display:flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid var(--line);
+    border-radius:3px;background:var(--bg3);font-family:var(--mono);font-size:10px;color:var(--tx3);
+    letter-spacing:.06em;cursor:pointer}
+  #signal.live{border-color:var(--mint);color:var(--mint)}
+  #signal .dots{display:flex;gap:2px}
+  #signal .dots i{width:3px;height:9px;background:var(--line2);border-radius:1px;display:block}
+  #signal.live .dots i.up{background:var(--mint);box-shadow:0 0 6px var(--mint)}
+
+  /* ---------- mapa ---------- */
+  .leaflet-container{background:#050408;font-family:var(--sans)}
+  .leaflet-control-zoom a{background:#120e1c!important;color:var(--tx2)!important;border-color:var(--line)!important}
+  .leaflet-control-attribution{background:rgba(5,4,8,.72)!important;color:#463d5c!important;font-size:9px}
+  .leaflet-control-attribution a{color:#57496f!important}
+  .halo{border-radius:50%;background:#fff;box-shadow:0 0 0 2px var(--amber),0 0 22px rgba(255,201,120,.85);
+        animation:pulse 1.7s infinite}
+  .halo.mine{box-shadow:0 0 0 2px var(--mint),0 0 22px rgba(109,255,158,.85)}
+  @keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.5);opacity:.65}}
+  .leaflet-tooltip{background:#0e0a16;border:1px solid var(--line2);color:var(--tx);box-shadow:none;
+    font-size:11.5px;font-family:var(--mono)}
+  .leaflet-tooltip-top:before{border-top-color:var(--line2)}
+  .beacon{border-radius:50%;background:var(--mag);box-shadow:0 0 0 2px rgba(255,61,139,.35),0 0 24px var(--mag);
+    animation:beat 2.2s infinite}
+  @keyframes beat{0%,100%{transform:scale(.7);opacity:.85}50%{transform:scale(1.7);opacity:.25}}
+  .ppl{border-radius:50%;background:var(--cyan);box-shadow:0 0 0 1px #050408,0 0 12px rgba(61,240,255,.9);
+       animation:breathe 3.4s infinite}
+  @keyframes breathe{0%,100%{opacity:.5;transform:scale(.85)}50%{opacity:1;transform:scale(1.15)}}
+
+  /* ---------- sidebar ---------- */
+  .tabs{display:flex;border-bottom:1px solid var(--line);background:var(--bg2)}
+  .tabs button{flex:1;padding:10px 2px;font-size:9.5px;letter-spacing:.10em;color:var(--tx3);
+    border-bottom:2px solid transparent;text-transform:uppercase;font-family:var(--mono)}
+  .tabs button.on{color:var(--amber);border-bottom-color:var(--amber);background:rgba(255,165,61,.05)}
+  .tabs button .badge{display:inline-block;min-width:14px;padding:0 3px;border-radius:7px;background:var(--mag);
+    color:#fff;font-size:8.5px;margin-left:3px;vertical-align:top}
+  .pane{flex:1;overflow-y:auto;display:none;padding:14px}
+  .pane.on{display:block}
+  .pane h3{margin:0 0 4px;font-size:17px;font-weight:500;line-height:1.25;letter-spacing:-.01em}
+  .meta{font-size:10.5px;color:var(--tx3);font-family:var(--mono);margin-bottom:12px;letter-spacing:.04em}
+  .tag{display:inline-block;padding:2px 7px;margin:0 4px 4px 0;border-radius:2px;background:var(--bg3);
+    border:1px solid var(--line);font-size:9.5px;color:var(--tx2);font-family:var(--mono);text-transform:uppercase}
+  .row{display:flex;gap:8px;align-items:center}
+  .lbl{font-size:9.5px;text-transform:uppercase;letter-spacing:.14em;color:var(--tx3);margin:16px 0 7px;
+    font-family:var(--mono)}
+  .field{width:100%;padding:8px 10px;background:var(--bg3);border:1px solid var(--line);border-radius:3px;
+    outline:none;font-size:13px;font-family:var(--mono)}
+  .field:focus{border-color:var(--amber)}
+  .btn{padding:7px 12px;border-radius:3px;border:1px solid var(--line2);background:var(--bg3);font-size:11px;
+    color:var(--tx2);transition:.15s;font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em}
+  .btn:hover{border-color:var(--amber);color:var(--amber)}
+  a.btn{text-decoration:none;display:inline-block}
+  .btn.primary{background:var(--amber);color:#160c02;border-color:var(--amber);font-weight:600}
+  .btn.primary:hover{background:var(--amber2);color:#160c02}
+  .btn.mint{background:var(--mint);color:#02180b;border-color:var(--mint);font-weight:600}
+  .btn.mint:hover{background:#9dffbf}
+  .empty{color:var(--tx3);font-size:12px;line-height:1.7;padding:22px 4px;text-align:center;font-family:var(--mono)}
+  .note{font-size:10.5px;color:var(--tx3);line-height:1.6;border-left:2px solid var(--line2);padding-left:9px;
+    margin-top:14px;font-family:var(--mono)}
+
+  /* miniatura da estação */
+  .thumb{width:30px;height:30px;border-radius:2px;object-fit:contain;background:#0d0a14;
+    border:1px solid var(--line);flex:none;padding:2px}
+  .thumb.big{width:56px;height:56px}
+  .thumb.ph{display:grid;place-items:center;font-family:var(--mono);font-size:10px;color:var(--tx3)}
+  .sthead{display:flex;gap:11px;align-items:flex-start;margin-bottom:8px}
+  .st{padding:8px 9px;border-radius:3px;cursor:pointer;border:1px solid transparent;margin-bottom:2px}
+  .st:hover{background:var(--bg3);border-color:var(--line)}
+  .st.on{background:rgba(255,165,61,.10);border-color:rgba(255,165,61,.35)}
+  .st.mine b{color:var(--mint)}
+  .st{display:flex;gap:8px;align-items:center}
+  .st .txt{min-width:0;flex:1}
+  .st b{display:block;font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .st i{font-style:normal;font-size:10px;color:var(--tx3);font-family:var(--mono)}
+
+  /* mensagens */
+  .msgs{display:flex;flex-direction:column;gap:8px;padding-bottom:8px}
+  .msg{background:var(--bg3);border:1px solid var(--line);border-radius:3px;padding:7px 10px;font-size:12.5px;
+    line-height:1.55}
+  .msg.mine{background:rgba(255,165,61,.07);border-color:rgba(255,165,61,.26)}
+  .msg .who{font-size:9.5px;font-family:var(--mono);margin-bottom:3px;display:flex;justify-content:space-between;
+    gap:8px;letter-spacing:.05em}
+  .msg .who b{font-weight:400;color:var(--cyan)}
+  .msg.mine .who b{color:var(--amber)}
+  .msg .who span{color:var(--tx3)}
+  .msg .tr{margin-top:5px;padding-top:5px;border-top:1px dashed var(--line2);font-size:12px;color:var(--tx2);
+    font-style:italic}
+  .msg .act{margin-top:4px;font-size:9.5px;color:var(--tx3);text-decoration:underline;cursor:pointer;
+    font-family:var(--mono)}
+  .msg .act:hover{color:var(--amber)}
+  .msg img.photo{display:block;width:100%;border-radius:2px;margin-top:7px;border:1px solid var(--line2)}
+  .msg.bcast{border-color:rgba(255,61,139,.45);background:linear-gradient(180deg,rgba(255,61,139,.10),rgba(255,61,139,.03))}
+  .msg.bcast .who b{color:var(--mag)}
+  .msg .geo{font-family:var(--mono);font-size:9.5px;color:var(--mag);letter-spacing:.08em;margin-top:5px}
+  .bcastbox{border:1px solid rgba(255,61,139,.35);border-radius:3px;padding:11px;margin-bottom:12px;
+    background:linear-gradient(180deg,rgba(255,61,139,.09),transparent)}
+  .bcastbox .lbl{margin:0 0 8px;color:var(--mag)}
+  .btn.mag{background:var(--mag);color:#fff;border-color:var(--mag);font-weight:600}
+  .btn.mag:hover{background:#ff5c9f}
+  .att{display:flex;align-items:center;gap:8px;margin-top:8px;font-family:var(--mono);font-size:10px;
+    color:var(--tx3)}
+  .att img{width:38px;height:38px;object-fit:cover;border-radius:2px;border:1px solid var(--line2)}
+  .composer{position:sticky;bottom:0;background:var(--bg2);padding-top:9px;border-top:1px solid var(--line);
+    margin-top:10px}
+
+  /* ---------- player ---------- */
+  .pl{display:flex;align-items:center;gap:12px;padding:10px 16px}
+  .tbtn{width:34px;height:34px;border-radius:3px;border:1px solid var(--line2);display:grid;place-items:center;
+    color:var(--tx2);flex:none;transition:.15s;background:var(--bg3)}
+  .tbtn:hover{border-color:var(--amber);color:var(--amber);box-shadow:0 0 14px var(--glow)}
+  .pbtn{width:44px;height:44px;border-radius:50%;background:var(--amber);color:#160c02;display:grid;
+    place-items:center;flex:none;transition:.15s;box-shadow:0 0 26px var(--glow)}
+  .pbtn:hover{background:var(--amber2)}
+  .pbtn.loading{animation:spin 1s linear infinite;background:var(--bg3);color:var(--amber)}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .now{flex:1;min-width:0}
+  .now b{display:block;font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .now i{font-style:normal;font-size:10.5px;color:var(--tx3);font-family:var(--mono);letter-spacing:.04em}
+  .bars{display:flex;align-items:flex-end;gap:2px;height:22px;width:30px;flex:none}
+  .bars b{width:3px;background:var(--amber);border-radius:1px;height:20%;transition:height .1s;
+    box-shadow:0 0 6px var(--glow)}
+  .sync{display:flex;align-items:center;gap:8px;padding:5px 10px;border:1px solid var(--line);border-radius:3px;
+    background:var(--bg3);flex:none}
+  .sync.on{border-color:var(--amber);box-shadow:0 0 16px var(--glow)}
+  .sync select,.sync input[type=number]{background:transparent;border:none;outline:none;font-size:11px;
+    color:var(--tx2);font-family:var(--mono)}
+  .sync select option{background:var(--bg3)}
+  .vol{width:76px;accent-color:var(--amber);flex:none}
+  .countdown{font-family:var(--mono);font-size:11px;color:var(--amber);min-width:24px;text-align:right}
+
+  #notice{position:fixed;top:0;left:0;right:0;z-index:9400;display:flex;align-items:center;gap:12px;
+    padding:9px 16px;background:linear-gradient(90deg,rgba(255,61,139,.20),rgba(168,107,255,.14));
+    border-bottom:1px solid rgba(255,61,139,.4);font-family:var(--mono);font-size:11.5px;
+    color:var(--tx);backdrop-filter:blur(8px)}
+  #notice b{color:var(--mag);font-weight:400;letter-spacing:.1em;text-transform:uppercase;flex:none}
+  #notice .x{margin-left:auto;cursor:pointer;color:var(--tx3);flex:none}
+  #notice .x:hover{color:var(--tx)}
+  #notice .go{border:1px solid var(--mag);color:var(--mag);padding:3px 10px;border-radius:2px;cursor:pointer;flex:none}
+  #toast{position:fixed;bottom:92px;left:50%;transform:translateX(-50%);background:var(--bg4);
+    border:1px solid var(--line2);border-radius:3px;padding:9px 15px;font-size:12px;z-index:9500;
+    opacity:0;pointer-events:none;transition:opacity .25s;max-width:70vw;text-align:center;font-family:var(--mono)}
+  #toast.on{opacity:1}
+
+  /* ---------- intro ---------- */
+  #intro{position:fixed;inset:0;background:rgba(3,2,6,.95);z-index:9600;display:grid;place-items:center;
+    padding:24px;backdrop-filter:blur(8px)}
+  .card{max-width:560px;background:linear-gradient(160deg,#0d0916,#080610);border:1px solid var(--line2);
+    border-radius:6px;padding:34px 36px;position:relative;overflow:hidden}
+  .card:before{content:'';position:absolute;inset:-1px;border-radius:6px;padding:1px;
+    background:linear-gradient(120deg,rgba(255,61,139,.5),rgba(61,240,255,.35),rgba(255,165,61,.5));
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:.55}
+  .card h1{font-family:var(--disp);font-size:40px;margin:0 0 6px;letter-spacing:.03em;color:var(--amber);
+    font-weight:400;line-height:1.1;
+    text-shadow:-2.5px 0 rgba(255,61,139,.6),2.5px 0 rgba(61,240,255,.5),0 0 40px rgba(255,165,61,.35)}
+  .card .sub{font-family:var(--mono);font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;
+    color:var(--tx3);margin:0 0 20px}
+  .card p{font-size:13px;line-height:1.75;color:var(--tx2)}
+  .card ul{font-size:12.5px;line-height:1.9;color:var(--tx2);padding-left:16px;margin:14px 0;
+    font-family:var(--mono)}
+  .card ul b{color:var(--amber);font-weight:400}
+
+  /* ---------- CENA ---------- */
+  #scene{position:fixed;inset:0;z-index:4000;display:none;background:#030206}
+  #scene.on{display:block}
+  #sky{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .sc-ui{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;
+    justify-content:space-between}
+  .sc-top{display:flex;align-items:flex-start;justify-content:space-between;padding:22px 26px}
+  .sc-title b{display:block;font-family:var(--disp);font-size:30px;font-weight:400;color:#fff;line-height:1.2;
+    text-shadow:-2px 0 rgba(255,61,139,.55),2px 0 rgba(61,240,255,.45),0 3px 30px rgba(0,0,0,.9)}
+  .sc-title i{font-style:normal;font-size:10px;letter-spacing:.24em;text-transform:uppercase;
+    color:rgba(255,255,255,.55);font-family:var(--mono)}
+  .sc-onair{display:inline-flex;align-items:center;gap:7px;margin-top:11px;padding:4px 11px;border-radius:2px;
+    font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-family:var(--mono);
+    background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.7)}
+  .sc-onair.live{border-color:var(--mint);color:var(--mint);background:rgba(109,255,158,.12)}
+  .sc-onair em{width:6px;height:6px;border-radius:50%;background:#6b6480;display:block}
+  .sc-onair.live em{background:var(--mint);animation:pulse 1.5s infinite}
+  .sc-bottom{padding:20px 26px 24px;display:flex;gap:11px;align-items:flex-end;flex-wrap:wrap;
+    pointer-events:auto}
+  .glass{background:rgba(6,5,10,.68);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.10);
+    border-radius:4px;padding:11px 13px}
+  .glass .lbl{margin:0 0 8px;color:rgba(255,255,255,.40)}
+  .sbtn{padding:6px 11px;border-radius:2px;border:1px solid rgba(255,255,255,.15);font-size:10.5px;
+    color:rgba(255,255,255,.7);transition:.15s;background:rgba(255,255,255,.04);font-family:var(--mono);
+    text-transform:uppercase;letter-spacing:.05em}
+  .sbtn:hover{border-color:var(--mint);color:var(--mint)}
+  .sbtn.on{background:var(--mint);border-color:var(--mint);color:#02180b;font-weight:600}
+  .sc-close{pointer-events:auto;padding:7px 13px;border-radius:3px;border:1px solid rgba(255,255,255,.16);
+    background:rgba(6,5,10,.6);backdrop-filter:blur(10px);font-size:10.5px;color:rgba(255,255,255,.75);
+    font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em}
+  .sc-close:hover{border-color:#fff;color:#fff}
+  .amb{display:flex;gap:6px;flex-wrap:wrap}
+  .sc-vol{width:100px;accent-color:var(--mint)}
+  .sleepwrap{font-size:10.5px;color:rgba(255,255,255,.55);font-family:var(--mono)}
+
+  /* ---------- VISUALIZADOR (tela cheia / protetor de tela) ---------- */
+  #viz{position:fixed;inset:0;z-index:5000;display:none;background:#000;cursor:none}
+  #viz.on{display:block}
+  #viz.showui{cursor:default}
+  #vizc{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .vz-ui{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;
+    padding:40px 46px;opacity:0;transition:opacity .4s;pointer-events:none}
+  #viz.showui .vz-ui{opacity:1;pointer-events:auto}
+  .vz-name{font-family:var(--disp);font-size:clamp(30px,6.2vw,84px);line-height:1.05;color:#fff;
+    max-width:15ch;letter-spacing:.02em;
+    text-shadow:-3px 0 rgba(255,61,139,.6),3px 0 rgba(61,240,255,.5),0 0 70px rgba(255,165,61,.3)}
+  .vz-sub{font-family:var(--mono);font-size:11px;letter-spacing:.28em;text-transform:uppercase;
+    color:rgba(255,255,255,.5);margin-top:14px}
+  .vz-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .vz-hint{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);font-family:var(--mono);
+    font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.28)}
+  /* nome grande fica visível mesmo com a UI escondida */
+  .vz-perm{position:absolute;left:46px;bottom:46px;pointer-events:none;transition:opacity .35s}
+  #viz.showui .vz-perm{opacity:0}
+  .vz-perm .vz-name{font-size:clamp(24px,4.4vw,60px)}
+
+  @media(max-width:860px){
+    #side{position:absolute;right:0;top:0;bottom:0;z-index:1500}
+    .search{max-width:none}
+    .legend,#status{display:none}
+    .vz-perm{left:20px;bottom:20px}
+  }
+</style>
+</head>
+<body>
+
+<div id="grain"></div>
+<div id="scan"></div>
+
+<div id="app">
+  <header id="top">
+    <div class="brand"><b>AFTER SIGNAL</b><span data-i18n="tagline">o que sobrou no ar</span></div>
+    <div class="search">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+        <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="q" data-i18n-ph="searchPh" placeholder="buscar estação, cidade, país, gênero…" autocomplete="off">
+    </div>
+    <div class="legend">
+      <span><i style="background:#ffa53d"></i><b data-i18n="lgCatalog">catálogo</b></span>
+      <span><i style="background:#6dff9e"></i><b data-i18n="lgPersonal">pessoais</b></span>
+      <span><i style="background:#3df0ff"></i><b data-i18n="lgPeople">gente</b></span>
+    </div>
+    <button class="chip on" id="fHttps" title="Streams em HTTP puro são bloqueados em páginas seguras">https</button>
+    <button class="chip" id="fFav">★</button>
+    <button class="chip mint" id="fMine" data-i18n="fPersonal">pessoais</button>
+    <button class="chip mag" id="bScene" data-i18n="fTower">torre</button>
+    <div id="signal" title="relays — a rede paralela"><span class="dots"><i></i><i></i><i></i><i></i></span><span id="sigTx" data-i18n="noSignal">sem sinal</span></div>
+    <div id="counters" title="quem está no ar e quem já passou por aqui">
+      <span id="cntLive">0</span><em id="cntLiveL">no ar</em>
+      <span class="sep">·</span>
+      <span id="cntSeen">0</span><em id="cntSeenL">já passaram</em>
+    </div>
+    <button class="chip mag" id="bSpeak">⟟</button>
+    <div id="status" data-i18n="starting">iniciando…</div>
+    <button class="chip" id="tSide" data-i18n="fPanel">painel</button>
+  </header>
+
+  <div id="map"></div>
+
+  <aside id="side">
+    <nav class="tabs">
+      <button data-p="p-est" class="on" data-i18n="tbStation">estação</button>
+      <button data-p="p-chat" data-i18n="tbRoom">sala</button>
+      <button data-p="p-global"><span data-i18n="tbGlobal">global</span><span class="badge" id="gBadge" hidden>0</span></button>
+      <button data-p="p-mural" data-i18n="tbWall">mural</button>
+      <button data-p="p-minha" data-i18n="tbMine">minha</button>
+    </nav>
+    <div class="pane on" id="p-est"></div>
+    <div class="pane" id="p-chat"></div>
+    <div class="pane" id="p-global"></div>
+    <div class="pane" id="p-mural"></div>
+    <div class="pane" id="p-minha"></div>
+  </aside>
+
+  <footer id="player">
+    <div class="pl">
+      <button class="tbtn" id="prev" title="anterior (b)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zM19 6v12l-9-6z"/></svg>
+      </button>
+      <button class="pbtn" id="play">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <button class="tbtn" id="next" title="próxima (n)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM5 6l9 6-9 6z"/></svg>
+      </button>
+      <button class="tbtn" id="bViz" title="expandir (f)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+      </button>
+      <div class="bars" id="bars"><b></b><b></b><b></b><b></b><b></b><b></b></div>
+      <div class="now">
+        <b id="nowName" data-i18n="silence">silêncio</b>
+        <i id="nowMeta" data-i18n="chooseHint">escolha um ponto no mapa</i>
+      </div>
+      <input type="range" class="vol" id="vol" min="0" max="100" value="80" title="volume">
+      <div class="sync" id="sync">
+        <button class="chip" id="syncBtn">▶ sincronizar</button>
+        <select id="syncMode" title="como escolher a próxima">
+          <option value="near" data-i18n="mNear">vizinhas</option>
+          <option value="random" data-i18n="mRandom">aleatória</option>
+          <option value="country" data-i18n="mCountry">mesmo país</option>
+          <option value="tag" data-i18n="mTag">mesmo gênero</option>
+          <option value="list" data-i18n="mList">ordem da busca</option>
+        </select>
+        <input type="number" id="syncSec" value="90" min="10" max="1800" step="10" style="width:46px" title="segundos">
+        <span class="countdown" id="cd">—</span>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ===================== CENA ===================== -->
+<div id="scene">
+  <canvas id="sky"></canvas>
+  <div class="sc-ui">
+    <div class="sc-top">
+      <div class="sc-title">
+        <i id="scKicker" data-i18n="yourStation">sua estação</i>
+        <b id="scName">sem nome</b>
+        <div class="sc-onair" id="scAir"><em></em><span>fora do ar</span></div>
+      </div>
+      <button class="sc-close" id="scClose"><span data-i18n="backToMap">voltar ao mapa</span> ✕</button>
+    </div>
+    <div class="sc-bottom">
+      <div class="glass"><div class="lbl" data-i18n="transmissionT">transmissão</div>
+        <div class="row"><button class="sbtn" id="scPlay">ligar</button>
+          <input type="range" class="sc-vol" id="scVol" min="0" max="100" value="80"></div></div>
+      <div class="glass"><div class="lbl" data-i18n="ambientT">ambiente</div>
+        <div class="amb">
+          <button class="sbtn" data-amb="rain" data-i18n="rainT">chuva</button>
+          <button class="sbtn" data-amb="wind" data-i18n="windT">vento</button>
+          <button class="sbtn" data-amb="fire" data-i18n="fireT">fogueira</button>
+          <button class="sbtn" data-amb="crickets" data-i18n="cricketsT">grilos</button>
+        </div></div>
+      <div class="glass"><div class="lbl" data-i18n="hourT">hora</div>
+        <div class="amb">
+          <button class="sbtn on" data-hour="auto" data-i18n="nowT">agora</button>
+          <button class="sbtn" data-hour="6.4" data-i18n="dawnT">amanhecer</button>
+          <button class="sbtn" data-hour="10" data-i18n="morningT">manhã</button>
+          <button class="sbtn" data-hour="18" data-i18n="duskT">entardecer</button>
+          <button class="sbtn" data-hour="23" data-i18n="nightT">noite</button>
+        </div></div>
+      <div class="glass"><div class="lbl" data-i18n="sleepT">dormir</div>
+        <div class="amb sleepwrap">
+          <button class="sbtn" data-sleep="0" data-i18n="offT">off</button>
+          <button class="sbtn" data-sleep="30">30m</button>
+          <button class="sbtn" data-sleep="60">1h</button>
+          <span id="scSleep" style="align-self:center"></span>
+        </div></div>
+      <div class="glass" style="flex:1;min-width:190px"><div class="lbl" data-i18n="playingNow">no ar agora</div>
+        <div style="font-size:12.5px;color:rgba(255,255,255,.85)" id="scNow">—</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================== VISUALIZADOR ================== -->
+<div id="viz">
+  <canvas id="vizc"></canvas>
+  <div class="vz-perm"><div class="vz-name" id="vzNameP"></div></div>
+  <div class="vz-ui">
+    <div>
+      <div class="vz-name" id="vzName">—</div>
+      <div class="vz-sub" id="vzSub"></div>
+    </div>
+    <div class="vz-bar">
+      <button class="sbtn" data-viz="waves" data-i18n="vWaves">ondas</button>
+      <button class="sbtn" data-viz="rings" data-i18n="vRings">anéis</button>
+      <button class="sbtn" data-viz="scope" data-i18n="vScope">osciloscópio</button>
+      <button class="sbtn" data-viz="aurora" data-i18n="vAurora">aurora</button>
+      <button class="sbtn" data-viz="tunnel" data-i18n="vTunnel">túnel</button>
+      <button class="sbtn" data-viz="ash" data-i18n="vAsh">cinzas</button>
+      <span style="width:14px"></span>
+      <button class="sbtn" id="vzBeat">batida real</button>
+      <span style="flex:1"></span>
+      <button class="sbtn" id="vzPrev">◀</button>
+      <button class="sbtn" id="vzPlay">■</button>
+      <button class="sbtn" id="vzNext">▶</button>
+      <button class="sbtn" id="vzClose"><span data-i18n="closeT">fechar</span> ✕</button>
+    </div>
+  </div>
+  <div class="vz-hint" data-i18n="vizHint">mexa o mouse para os controles · esc para sair</div>
+</div>
+
+<div id="notice" hidden></div>
+<div id="toast"></div>
+
+<div id="intro">
+  <div class="card">
+    <h1>AFTER SIGNAL</h1>
+    <p class="sub"><span data-i18n="introSub">rede paralela · protótipo</span> v0.5</p>
+    <p data-i18n="introP"></p>
+    <ul>
+      <li data-i18n="introLi1"></li>
+      <li data-i18n="introLi2"></li>
+      <li data-i18n="introLi3"></li>
+      <li data-i18n="introLi4"></li>
+    </ul>
+    <p style="font-size:11.5px;color:var(--tx3);border-left:2px solid var(--line2);padding-left:10px;
+       font-family:var(--mono);line-height:1.65" data-i18n="introPriv"></p>
+    <div class="lbl" data-i18n="langLabel" style="margin-bottom:8px">idioma</div>
+    <div class="amb" id="langPick"></div>
+    <div class="row" style="margin-top:22px">
+      <button class="btn primary" id="go" data-i18n="enter">sintonizar</button>
+      <input class="field" id="nick" data-i18n-ph="nickPh" placeholder="como te chamam no ar" style="flex:1">
+    </div>
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line);
+                font-family:var(--mono);font-size:9.5px;letter-spacing:.10em;color:var(--tx3);
+                display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <span>AFTER SIGNAL © 2026 DOUGLAS KARNOSKI</span>
+      <a href="https://github.com/douglaskarnoski-cpu" target="_blank" rel="noopener"
+         style="color:var(--tx3);text-decoration:none;border-bottom:1px solid var(--line2)">github.com/douglaskarnoski-cpu</a>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.17/hls.min.js"></script>
+<script>
+/* =========================================================================
+   AFTER SIGNAL — © 2026 Douglas Karnoski · github.com/douglaskarnoski-cpu
+   Todos os direitos reservados. Uso pessoal livre; redistribuição e obras
+   derivadas exigem autorização escrita. Veja LICENSE.
+
+   AFTER SIGNAL v0.4
+   Rádios  : Radio Browser API — catálogo aberto, sem chave.
+   Rede    : relays Nostr públicos (NIP-01). Nenhum servidor nosso existe.
+             Identidade = par de chaves gerado e guardado no seu navegador.
+   Cripto  : SHA-256 e assinatura schnorr BIP-340 implementados aqui, em JS
+             puro — sem dependência de CDN, funciona offline e em file://.
+             Validados contra os vetores oficiais do BIP-340.
+   Tradução: MyMemory. Ambiente: WebAudio, sintetizado na hora.
+   ========================================================================= */
+
+/* ======================================================================
+   IDIOMAS — pt-BR, en, es, fr, zh, ru, uk, ar
+   ====================================================================== */
+const LANGS = {
+  'pt':{name:'Português',   flag:'BR'},
+  'en':{name:'English',     flag:'EN'},
+  'es':{name:'Español',     flag:'ES'},
+  'fr':{name:'Français',    flag:'FR'},
+  'zh':{name:'中文',         flag:'ZH'},
+  'ru':{name:'Русский',     flag:'RU'},
+  'uk':{name:'Українська',  flag:'UA'},
+  'ar':{name:'العربية',      flag:'AR', rtl:true}
+};
+
+const T = {
+/* --- marca e entrada --- */
+tagline:      ['o que sobrou no ar','what is left on air','lo que quedó en el aire','ce qui reste dans les ondes','残存的电波','что осталось в эфире','що лишилось в ефірі','ما تبقّى في الأثير'],
+introSub:     ['rede paralela · protótipo','parallel network · prototype','red paralela · prototipo','réseau parallèle · prototype','平行网络 · 原型','параллельная сеть · прототип','паралельна мережа · прототип','شبكة موازية · نموذج أولي'],
+introP:       ['Depois que tudo virou feed, sobrou isto: milhares de rádios reais transmitindo agora, um mapa do mundo, e gente do outro lado. Sem algoritmo, sem curtida, sem dono.',
+               'After everything became a feed, this is what is left: thousands of real radios on air right now, a map of the world, and people on the other side. No algorithm, no likes, no owner.',
+               'Después de que todo se volvió feed, quedó esto: miles de radios reales al aire ahora, un mapa del mundo y gente del otro lado. Sin algoritmo, sin likes, sin dueño.',
+               'Quand tout est devenu fil d’actualité, il reste ceci : des milliers de radios réelles en direct, une carte du monde, et des gens de l’autre côté. Sans algorithme, sans like, sans propriétaire.',
+               '当一切都变成信息流之后，剩下的是这个：此刻正在播出的数千个真实电台、一张世界地图，以及另一端的人。没有算法，没有点赞，没有主人。',
+               'После того как всё стало лентой, осталось это: тысячи настоящих радиостанций в эфире прямо сейчас, карта мира и люди по ту сторону. Без алгоритма, без лайков, без хозяина.',
+               'Після того як усе стало стрічкою, лишилось це: тисячі справжніх радіостанцій в ефірі просто зараз, карта світу і люди з того боку. Без алгоритму, без лайків, без власника.',
+               'بعد أن تحوّل كل شيء إلى خلاصة أخبار، بقي هذا: آلاف الإذاعات الحقيقية على الهواء الآن، وخريطة للعالم، وأناس على الطرف الآخر. بلا خوارزمية، بلا إعجابات، بلا مالك.'],
+introLi1:     ['o mapa — cada ponto é uma estação no ar, de verdade','the map — every dot is a station really on air','el mapa — cada punto es una emisora realmente al aire','la carte — chaque point est une station réellement en direct','地图 — 每个点都是真正在播的电台','карта — каждая точка это станция в эфире','карта — кожна точка це станція в ефірі','الخريطة — كل نقطة محطة على الهواء فعلاً'],
+introLi2:    ['o sincronizador — deixe ligado e o mundo escolhe por você','the scanner — leave it on and the world chooses for you','el sincronizador — déjalo encendido y el mundo elige por ti','le scanner — laissez-le tourner et le monde choisit pour vous','扫描器 — 打开它，让世界替你挑选','сканер — включите, и мир выберет за вас','сканер — увімкніть, і світ обере за вас','الماسح — اتركه يعمل ودع العالم يختار لك'],
+introLi3:    ['as salas — conversa por estação e um canal global','the rooms — a chat per station and one global channel','las salas — charla por emisora y un canal global','les salons — un chat par station et un canal global','聊天室 — 每个电台一个房间，外加全球频道','комнаты — чат на станцию и общий канал','кімнати — чат на станцію і спільний канал','الغرف — دردشة لكل محطة وقناة عالمية'],
+introLi4:    ['a sua torre — coloque a sua rádio no mapa e na paisagem','your tower — put your own radio on the map and in the landscape','tu torre — pon tu radio en el mapa y en el paisaje','votre tour — placez votre radio sur la carte et dans le paysage','你的信号塔 — 把自己的电台放上地图与风景','ваша башня — поставьте своё радио на карту и в пейзаж','ваша вежа — поставте своє радіо на карту і в пейзаж','برجك — ضع إذاعتك على الخريطة وفي المشهد'],
+introPriv:   ['sua identidade é uma chave gerada aqui, no seu computador. nenhum cadastro, nenhum e-mail, nenhum servidor nosso. você aparece no mapa só se quiser.',
+              'your identity is a key generated here, on your computer. no sign-up, no e-mail, no server of ours. you appear on the map only if you want to.',
+              'tu identidad es una clave generada aquí, en tu computadora. sin registro, sin correo, sin servidor nuestro. apareces en el mapa solo si quieres.',
+              'votre identité est une clé générée ici, sur votre ordinateur. aucune inscription, aucun e-mail, aucun serveur à nous. vous n’apparaissez sur la carte que si vous le voulez.',
+              '你的身份是在你电脑上生成的一把密钥。无需注册，无需邮箱，没有我们的服务器。只有你愿意时才会出现在地图上。',
+              'ваша личность — ключ, созданный здесь, на вашем компьютере. без регистрации, без почты, без наших серверов. на карте вы появитесь только если захотите.',
+              'ваша особистість — ключ, створений тут, на вашому комп’ютері. без реєстрації, без пошти, без наших серверів. на карті ви з’явитесь лише якщо захочете.',
+              'هويتك مفتاح يُولَّد هنا على حاسوبك. بلا تسجيل، بلا بريد، وبلا خادم لنا. لن تظهر على الخريطة إلا إذا أردت.'],
+enter:       ['sintonizar','tune in','sintonizar','se brancher','开始收听','настроиться','налаштуватись','اضبط الموجة'],
+nickPh:      ['como te chamam no ar','what they call you on air','cómo te llaman al aire','comment on vous appelle à l’antenne','大家在电波里怎么称呼你','как вас зовут в эфире','як вас звати в ефірі','بماذا يُنادونك على الهواء'],
+langLabel:   ['idioma','language','idioma','langue','语言','язык','мова','اللغة'],
+
+/* --- topo --- */
+searchPh:    ['buscar estação, cidade, país, gênero…','search station, city, country, genre…','buscar emisora, ciudad, país, género…','chercher station, ville, pays, genre…','搜索电台、城市、国家、类型…','поиск станции, города, страны, жанра…','пошук станції, міста, країни, жанру…','ابحث عن محطة أو مدينة أو بلد أو نوع…'],
+lgCatalog:   ['catálogo','catalog','catálogo','catalogue','目录','каталог','каталог','الدليل'],
+lgPersonal:  ['pessoais','personal','personales','personnelles','个人','личные','особисті','شخصية'],
+lgPeople:    ['gente','people','gente','gens','人','люди','люди','أشخاص'],
+fPersonal:   ['pessoais','personal','personales','perso','个人','личные','особисті','شخصية'],
+fTower:      ['torre','tower','torre','tour','信号塔','башня','вежа','البرج'],
+fPanel:      ['painel','panel','panel','panneau','面板','панель','панель','اللوحة'],
+noSignal:    ['sem sinal','no signal','sin señal','pas de signal','无信号','нет сигнала','немає сигналу','لا إشارة'],
+relaysN:     ['relays','relays','relays','relais','中继','релеи','релеї','مُرحِّلات'],
+onAirN:      ['no ar','on air','al aire','en direct','在线','в эфире','в ефірі','على الهواء'],
+onMapN:      ['no mapa','on map','en el mapa','sur la carte','在地图上','на карте','на карті','على الخريطة'],
+starting:    ['iniciando…','starting…','iniciando…','démarrage…','启动中…','запуск…','запуск…','جارٍ البدء…'],
+tracking:    ['rastreando…','scanning…','rastreando…','balayage…','扫描中…','сканирование…','сканування…','جارٍ المسح…'],
+sweeping:    ['varrendo…','searching…','buscando…','recherche…','搜索中…','поиск…','пошук…','جارٍ البحث…'],
+points:      ['pontos','dots','puntos','points','个点','точек','точок','نقطة'],
+found:       ['achados','found','hallados','trouvés','个结果','найдено','знайдено','نتيجة'],
+mutedCat:    ['catálogo mudo','catalog silent','catálogo mudo','catalogue muet','目录无响应','каталог молчит','каталог мовчить','الدليل صامت'],
+
+/* --- abas --- */
+tbStation:   ['estação','station','emisora','station','电台','станция','станція','المحطة'],
+tbRoom:      ['sala','room','sala','salon','房间','комната','кімната','الغرفة'],
+tbGlobal:    ['global','global','global','global','全球','общий','спільний','عالمي'],
+tbWall:      ['mural','wall','muro','mur','留言墙','стена','стіна','الجدار'],
+tbMine:      ['minha','mine','mía','la mienne','我的','моё','моє','إذاعتي'],
+
+/* --- player --- */
+silence:     ['silêncio','silence','silencio','silence','静默','тишина','тиша','صمت'],
+chooseHint:  ['escolha um ponto no mapa — ou ligue o sincronizador e deixe o mundo escolher',
+              'pick a dot on the map — or turn on the scanner and let the world choose',
+              'elige un punto en el mapa — o enciende el sincronizador y deja que el mundo elija',
+              'choisissez un point sur la carte — ou lancez le scanner et laissez le monde choisir',
+              '在地图上选一个点 — 或打开扫描器，让世界替你选',
+              'выберите точку на карте — или включите сканер и пусть мир выберет',
+              'оберіть точку на карті — або увімкніть сканер і хай світ обере',
+              'اختر نقطة على الخريطة — أو شغّل الماسح ودع العالم يختار'],
+syncOn:      ['sincronizar','scan','sincronizar','scanner','扫描','сканировать','сканувати','مسح'],
+mNear:       ['vizinhas','nearby','vecinas','voisines','附近','рядом','поруч','المجاورة'],
+mRandom:     ['aleatória','random','aleatoria','aléatoire','随机','случайно','випадково','عشوائي'],
+mCountry:    ['mesmo país','same country','mismo país','même pays','同一国家','та же страна','та сама країна','نفس البلد'],
+mTag:        ['mesmo gênero','same genre','mismo género','même genre','同一类型','тот же жанр','той самий жанр','نفس النوع'],
+mList:       ['ordem da busca','search order','orden de búsqueda','ordre de recherche','搜索顺序','порядок поиска','порядок пошуку','ترتيب البحث'],
+prevT:       ['anterior','previous','anterior','précédente','上一个','предыдущая','попередня','السابقة'],
+nextT:       ['próxima','next','siguiente','suivante','下一个','следующая','наступна','التالية'],
+expandT:     ['expandir','expand','expandir','plein écran','全屏','развернуть','розгорнути','ملء الشاشة'],
+
+/* --- estação --- */
+staticTxt:   ['estática.','static.','estática.','statique.','静电噪声。','помехи.','шум.','تشويش.'],
+clickDot:    ['clique num ponto do mapa —','click a dot on the map —','haz clic en un punto del mapa —','cliquez sur un point de la carte —','点击地图上的一个点 —','нажмите точку на карте —','натисніть точку на карті —','انقر نقطة على الخريطة —'],
+orScanner:   ['ou ligue o sincronizador','or turn on the scanner','o enciende el sincronizador','ou lancez le scanner','或打开扫描器','или включите сканер','або увімкніть сканер','أو شغّل الماسح'],
+andWorld:    ['e deixe o mundo escolher','and let the world choose','y deja que el mundo elija','et laissez le monde choisir','让世界替你选','и пусть мир выберет','і хай світ обере','ودع العالم يختار'],
+favorite:    ['favoritar','favorite','favorita','favori','收藏','в избранное','в обране','تفضيل'],
+favorited:   ['favorita','favorited','favorita','favori','已收藏','в избранном','в обраному','مفضّلة'],
+siteT:       ['site','site','sitio','site','网站','сайт','сайт','الموقع'],
+listens:     ['escutas registradas','recorded listens','escuchas registradas','écoutes enregistrées','次收听记录','прослушиваний','прослуховувань','استماع مسجل'],
+yourRadio:   ['SUA RÁDIO','YOUR RADIO','TU RADIO','VOTRE RADIO','你的电台','ВАШЕ РАДИО','ВАШЕ РАДІО','إذاعتك'],
+radioOf:     ['RÁDIO DE','RADIO BY','RADIO DE','RADIO DE','电台来自','РАДИО ОТ','РАДІО ВІД','إذاعة'],
+yoursShort:  ['sua','yours','tuya','la vôtre','你的','ваше','ваше','لك'],
+byShort:     ['de','by','de','de','来自','от','від','لـ'],
+beenThrough: ['por onde você passou','where you have been','por dónde pasaste','où vous êtes passé','你走过的地方','где вы были','де ви були','أين مررت'],
+resultsT:    ['achados','results','hallados','résultats','结果','результаты','результати','النتائج'],
+somebody:    ['alguém','somebody','alguien','quelqu’un','某人','кто-то','хтось','أحدهم']
+};
+
+Object.assign(T, {
+/* --- conversa --- */
+globalChan:  ['Canal global','Global channel','Canal global','Canal global','全球频道','Общий канал','Спільний канал','القناة العالمية'],
+openNow:     ['aberto','open','abierto','ouvert','已连接','открыт','відкритий','مفتوح'],
+offlineNow:  ['sem relay — offline','no relay — offline','sin relay — offline','sans relais — hors ligne','无中继 — 离线','нет релея — офлайн','немає релею — офлайн','لا مُرحِّل — غير متصل'],
+nowOnAir:    ['no ar agora','on air now','al aire ahora','en ligne maintenant','人在线','сейчас в эфире','зараз в ефірі','على الهواء الآن'],
+lastSignal:  ['último sinal','last signal','última señal','dernier signal','最后的信号','последний сигнал','останній сигнал','الإشارة الأخيرة'],
+bcastDesc:   ['uma transmissão para o mundo inteiro, marcada no mapa de onde ela saiu.',
+              'a broadcast to the whole world, marked on the map where it came from.',
+              'una transmisión para el mundo entero, marcada en el mapa desde donde salió.',
+              'une émission pour le monde entier, marquée sur la carte à l’endroit d’où elle part.',
+              '向全世界发出的一次广播，会在地图上标出它从哪里发出。',
+              'передача на весь мир, отмеченная на карте там, откуда она вышла.',
+              'передача на весь світ, позначена на карті там, звідки вона вийшла.',
+              'بث إلى العالم كله، يُعلَّم على الخريطة من حيث انطلق.'],
+bcastNoGeo:  ['— sem posição compartilhada, sai sem coordenada.','— with no shared position, it goes without coordinates.','— sin posición compartida, sale sin coordenadas.','— sans position partagée, il part sans coordonnées.','— 未共享位置时，将不带坐标发出。','— без общей позиции уйдёт без координат.','— без спільної позиції піде без координат.','— بدون موقع مشترك، سيُرسَل بلا إحداثيات.'],
+bcastPh:     ['alguém aí? aqui é…','anyone out there? this is…','¿hay alguien? aquí…','quelqu’un m’entend ? ici…','有人吗？这里是…','кто-нибудь слышит? это…','хтось чує? це…','هل من أحد؟ هنا…'],
+bcastBtn:    ['transmitir ao mundo','broadcast to the world','transmitir al mundo','émettre vers le monde','向世界广播','передать миру','передати світу','بثّ إلى العالم'],
+chatPh:      ['falar no canal…','speak on the channel…','hablar en el canal…','parler sur le canal…','在频道里说话…','написать в канал…','написати в канал…','تحدّث في القناة…'],
+roomPh:      ['falar com quem ouve o mesmo…','talk to whoever hears the same…','hablar con quien oye lo mismo…','parler à ceux qui écoutent la même chose…','和听同一个电台的人说话…','написать тем, кто слушает то же…','написати тим, хто слухає те саме…','تحدّث إلى من يسمع نفس المحطة…'],
+roomSub:     ['sala de quem está ouvindo isto','room of whoever is hearing this','sala de quien está oyendo esto','salon de ceux qui écoutent ceci','正在收听这个电台的人','комната тех, кто это слушает','кімната тих, хто це слухає','غرفة من يستمع لهذا'],
+tuneFirst:   ['sintonize uma estação','tune a station first','sintoniza una emisora','choisissez une station','先选一个电台','сначала выберите станцию','спершу оберіть станцію','اضبط محطة أولاً'],
+toSeeRoom:   ['para entrar na sala dela','to enter its room','para entrar en su sala','pour entrer dans son salon','才能进入它的房间','чтобы войти в её комнату','щоб увійти в її кімнату','لدخول غرفتها'],
+toSeeWall:   ['para ver o mural dela','to see its wall','para ver su muro','pour voir son mur','才能看到它的留言墙','чтобы увидеть её стену','щоб побачити її стіну','لرؤية جدارها'],
+sendT:       ['enviar','send','enviar','envoyer','发送','отправить','надіслати','إرسال'],
+photoT:      ['foto','photo','foto','photo','照片','фото','фото','صورة'],
+enterSends:  ['↵ envia','↵ sends','↵ envía','↵ envoie','↵ 发送','↵ отправить','↵ надіслати','↵ للإرسال'],
+nobodyYet:   ['ninguém falou ainda.','nobody has spoken yet.','nadie ha hablado aún.','personne n’a encore parlé.','还没有人说话。','пока никто не говорил.','поки ніхто не говорив.','لم يتحدث أحد بعد.'],
+saySomething:['diga alguma coisa —','say something —','di algo —','dites quelque chose —','说点什么 —','скажите что-нибудь —','скажіть щось —','قل شيئاً —'],
+someoneReads:['alguém do outro lado vai ler.','someone on the other side will read it.','alguien del otro lado lo leerá.','quelqu’un de l’autre côté le lira.','另一端的人会看到。','кто-то на той стороне прочтёт.','хтось на тому боці прочитає.','سيقرأه أحدهم على الطرف الآخر.'],
+translateT:  ['traduzir','translate','traducir','traduire','翻译','перевести','перекласти','ترجمة'],
+translating: ['traduzindo…','translating…','traduciendo…','traduction…','翻译中…','перевод…','переклад…','جارٍ الترجمة…'],
+seeOnMap:    ['ver no mapa','see on map','ver en el mapa','voir sur la carte','在地图上查看','на карте','на карті','عرض على الخريطة'],
+compressing: ['comprimindo…','compressing…','comprimiendo…','compression…','压缩中…','сжатие…','стиснення…','جارٍ الضغط…'],
+attached:    ['anexados','attached','adjuntos','joints','已附加','прикреплено','прикріплено','مرفق'],
+removeT:     ['tirar','remove','quitar','retirer','移除','убрать','прибрати','إزالة'],
+
+/* --- mural --- */
+wallT:       ['Mural','Wall','Muro','Mur','留言墙','Стена','Стіна','الجدار'],
+wallSub:     ['um bilhete por pessoa, editável','one note per person, editable','una nota por persona, editable','un mot par personne, modifiable','每人一条留言，可修改','по одной записке на человека, можно менять','по одній записці на людину, можна змінювати','ملاحظة واحدة لكل شخص، قابلة للتعديل'],
+noNotes:     ['nenhum bilhete pregado aqui.','no notes pinned here.','ningún mensaje aquí.','aucun mot épinglé ici.','这里还没有留言。','здесь пока нет записок.','тут поки немає записок.','لا ملاحظات هنا.'],
+notePh:      ['deixe um bilhete para quem passar por esta frequência…','leave a note for whoever passes this frequency…','deja una nota para quien pase por esta frecuencia…','laissez un mot pour qui passera sur cette fréquence…','给经过这个频率的人留一句话…','оставьте записку тем, кто пройдёт по этой частоте…','залиште записку тим, хто пройде цією частотою…','اترك ملاحظة لمن يمرّ على هذا التردد…'],
+pinT:        ['pregar','pin','fijar','épingler','留下','прикрепить','прикріпити','تثبيت'],
+rewriteT:    ['reescrever','rewrite','reescribir','réécrire','改写','переписать','переписати','إعادة كتابة'],
+wallNote:    ['o mural fica nos relays. quem chegar amanhã ainda lê.','the wall lives on the relays. whoever arrives tomorrow still reads it.','el muro vive en los relays. quien llegue mañana aún lo lee.','le mur vit sur les relais. celui qui arrivera demain le lira encore.','留言墙保存在中继上。明天来的人依然读得到。','стена живёт на релеях. кто придёт завтра, всё ещё прочтёт.','стіна живе на релеях. хто прийде завтра, ще прочитає.','الجدار يعيش على المُرحِّلات. من يأتي غداً سيقرأه.'],
+
+/* --- minha rádio --- */
+yourBroadcast:['Sua transmissão','Your broadcast','Tu transmisión','Votre émission','你的广播','Ваша передача','Ваша передача','بثّك'],
+colorsNote:  ['as suas ficam verdes no mapa · as de outras pessoas, roxas','yours are green on the map · other people’s are purple','las tuyas van en verde · las de otros, en morado','les vôtres en vert · celles des autres en violet','你的显示为绿色 · 别人的为紫色','ваши зелёные на карте · чужие фиолетовые','ваші зелені на карті · чужі фіолетові','لك بالأخضر على الخريطة · للآخرين بالبنفسجي'],
+seeTower:    ['ver a torre','see the tower','ver la torre','voir la tour','查看信号塔','смотреть башню','дивитись вежу','عرض البرج'],
+nameT:       ['nome','name','nombre','nom','名称','название','назва','الاسم'],
+whereIsIt:   ['onde ela fica','where it is','dónde está','où elle se trouve','它在哪里','где она','де вона','أين هي'],
+myPosition:  ['minha posição','my position','mi posición','ma position','我的位置','моя позиция','моя позиція','موقعي'],
+putOnAir:    ['colocar no ar','put on air','poner al aire','mettre en ondes','开始广播','в эфир','в ефір','بثّ'],
+saveT:       ['salvar','save','guardar','enregistrer','保存','сохранить','зберегти','حفظ'],
+editT:       ['editar','edit','editar','modifier','编辑','изменить','змінити','تعديل'],
+deleteT:     ['apagar','delete','borrar','supprimer','删除','удалить','видалити','حذف'],
+yourStations:['suas estações','your stations','tus emisoras','vos stations','你的电台','ваши станции','ваші станції','محطاتك'],
+appearOnMap: ['aparecer no mapa','appear on the map','aparecer en el mapa','apparaître sur la carte','出现在地图上','появиться на карте','з’явитись на карті','الظهور على الخريطة'],
+appearNote:  ['sua posição é arredondada para cerca de 50 km e só é enviada se você marcar. sem isso você continua no ar, só não aparece como ponto.',
+              'your position is rounded to about 50 km and only sent if you opt in. without it you are still on air, you just do not show as a dot.',
+              'tu posición se redondea a unos 50 km y solo se envía si lo activas. sin eso sigues al aire, solo no apareces como punto.',
+              'votre position est arrondie à environ 50 km et n’est envoyée que si vous l’activez. sans cela vous restez en ondes, vous n’apparaissez simplement pas.',
+              '你的位置会被取整到约 50 公里，并且只有你同意时才会发送。不发送也照样在线，只是不显示为一个点。',
+              'ваша позиция округляется примерно до 50 км и отправляется только по вашему выбору. без неё вы всё равно в эфире, просто не видны точкой.',
+              'ваша позиція округлюється приблизно до 50 км і надсилається лише за вашим вибором. без неї ви все одно в ефірі, просто не видні точкою.',
+              'يُقرَّب موقعك إلى نحو ٥٠ كم ولا يُرسَل إلا بموافقتك. بدونه تبقى على الهواء، لكن لا تظهر كنقطة.'],
+wantAppear:  ['quero aparecer','I want to appear','quiero aparecer','je veux apparaître','我想出现','хочу появиться','хочу з’явитись','أريد الظهور'],
+appearing:   ['aparecendo','appearing','apareciendo','visible','已显示','виден','видно','ظاهر'],
+disappearT:  ['sumir','disappear','desaparecer','disparaître','隐藏','скрыться','сховатись','اختفاء'],
+identityNote:['identidade: uma chave gerada no seu computador, que nunca sai daqui. apagar os dados do navegador apaga a sua identidade.',
+              'identity: a key generated on your computer that never leaves it. clearing browser data erases your identity.',
+              'identidad: una clave generada en tu computadora que nunca sale de ahí. borrar los datos del navegador borra tu identidad.',
+              'identité : une clé générée sur votre ordinateur et qui n’en sort jamais. effacer les données du navigateur efface votre identité.',
+              '身份：在你电脑上生成、从不外传的一把密钥。清除浏览器数据即抹掉你的身份。',
+              'личность: ключ, созданный на вашем компьютере и никогда его не покидающий. очистка данных браузера стирает вашу личность.',
+              'особистість: ключ, створений на вашому комп’ютері, який ніколи його не покидає. очищення даних браузера стирає вашу особистість.',
+              'الهوية: مفتاح يُولَّد على حاسوبك ولا يغادره أبداً. مسح بيانات المتصفح يمحو هويتك.'],
+
+/* --- de onde vem o som (assistente) --- */
+whereSound:  ['de onde vem o som?','where does the sound come from?','¿de dónde viene el sonido?','d’où vient le son ?','声音从哪里来？','откуда идёт звук?','звідки йде звук?','من أين يأتي الصوت؟'],
+wayLink:     ['já tenho um link','I already have a link','ya tengo un enlace','j’ai déjà un lien','我已有链接','у меня уже есть ссылка','у мене вже є посилання','لديّ رابط'],
+wayList:     ['montar uma programação','build a schedule','armar una programación','composer une grille','编排节目','собрать программу','зібрати програму','بناء جدول'],
+wayLocal:    ['só para mim','just for me','solo para mí','juste pour moi','只给我自己','только для себя','лише для себе','لي وحدي'],
+wayLinkH:    ['Cole o endereço de um stream que já existe (Icecast, Shoutcast, AzuraCast, um provedor pago). É a única forma de transmitir ao vivo de verdade.',
+              'Paste the address of a stream that already exists (Icecast, Shoutcast, AzuraCast, a paid provider). It is the only way to truly broadcast live.',
+              'Pega la dirección de un stream que ya existe (Icecast, Shoutcast, AzuraCast, un proveedor de pago). Es la única forma de transmitir en vivo de verdad.',
+              'Collez l’adresse d’un flux existant (Icecast, Shoutcast, AzuraCast, un service payant). C’est la seule vraie façon d’émettre en direct.',
+              '粘贴一个已有的流地址（Icecast、Shoutcast、AzuraCast 或付费服务）。这是真正实时广播的唯一方式。',
+              'Вставьте адрес существующего потока (Icecast, Shoutcast, AzuraCast, платный провайдер). Это единственный способ вещать вживую по-настоящему.',
+              'Вставте адресу наявного потоку (Icecast, Shoutcast, AzuraCast, платний провайдер). Це єдиний спосіб справді мовити наживо.',
+              'الصق عنوان بثّ موجود (Icecast أو Shoutcast أو AzuraCast أو مزوّد مدفوع). هذه الطريقة الوحيدة للبث الحيّ فعلاً.'],
+wayListH:    ['Sem servidor nenhum: você lista os endereços das suas músicas (hospedadas onde quiser) e o app calcula, pelo relógio, o que estaria tocando agora. Todo mundo que sintonizar ouve o mesmo trecho, ao mesmo tempo.',
+              'No server at all: you list the addresses of your tracks (hosted wherever you like) and the app works out from the clock what would be playing now. Everyone who tunes in hears the same passage, at the same time.',
+              'Sin ningún servidor: listas las direcciones de tus canciones (alojadas donde quieras) y la app calcula por reloj qué estaría sonando ahora. Todos los que sintonizan oyen lo mismo, a la vez.',
+              'Sans aucun serveur : vous listez les adresses de vos morceaux (hébergés où vous voulez) et l’app calcule à l’horloge ce qui passerait maintenant. Tous ceux qui se branchent entendent le même passage, en même temps.',
+              '完全不需要服务器：你列出自己曲目的地址（想放哪托管都行），应用按时钟推算此刻应该在播什么。所有收听的人在同一时间听到同一段。',
+              'Совсем без сервера: вы перечисляете адреса своих треков (размещённых где угодно), а приложение по часам вычисляет, что играло бы сейчас. Все, кто настроится, слышат один и тот же отрывок одновременно.',
+              'Зовсім без сервера: ви перелічуєте адреси своїх треків (розміщених де завгодно), а застосунок за годинником обчислює, що грало б зараз. Усі, хто налаштується, чують той самий уривок одночасно.',
+              'بلا أي خادم: تُدرِج عناوين مقطوعاتك (مستضافة حيث تشاء) ويحسب التطبيق بالساعة ما ينبغي أن يُبثّ الآن. كل من يضبط الموجة يسمع المقطع نفسه في الوقت نفسه.'],
+wayLocalH:   ['Arquivos do seu computador, tocados em sequência. Não sai daqui — ninguém mais ouve, e some quando você fecha.',
+              'Files from your computer, played in sequence. It stays here — nobody else hears it, and it is gone when you close.',
+              'Archivos de tu computadora, en secuencia. No sale de aquí — nadie más lo oye y se pierde al cerrar.',
+              'Des fichiers de votre ordinateur, joués à la suite. Ça ne sort pas d’ici — personne d’autre n’entend, et tout disparaît à la fermeture.',
+              '你电脑里的文件，依次播放。不会外传 — 别人听不到，关闭后即消失。',
+              'Файлы с вашего компьютера, по очереди. Никуда не уходит — никто другой не слышит, и всё пропадает при закрытии.',
+              'Файли з вашого комп’ютера, по черзі. Нікуди не йде — ніхто інший не чує, і все зникає при закритті.',
+              'ملفات من حاسوبك تُشغَّل بالتتابع. لا تغادر هنا — لا أحد غيرك يسمعها، وتزول عند الإغلاق.'],
+addTrack:    ['adicionar faixa','add track','añadir pista','ajouter un morceau','添加曲目','добавить трек','додати трек','إضافة مقطع'],
+trackUrlPh:  ['endereço da música (mp3/ogg)…','track address (mp3/ogg)…','dirección de la canción (mp3/ogg)…','adresse du morceau (mp3/ogg)…','曲目地址 (mp3/ogg)…','адрес трека (mp3/ogg)…','адреса треку (mp3/ogg)…','عنوان المقطع (mp3/ogg)…'],
+tracksN:     ['faixas','tracks','pistas','morceaux','首曲目','треков','треків','مقطع'],
+whereHost:   ['onde hospedar de graça: archive.org, um repositório no GitHub (Pages), Cloudflare R2, ou qualquer link direto para o arquivo.',
+              'free places to host: archive.org, a GitHub repo (Pages), Cloudflare R2, or any direct link to the file.',
+              'dónde alojar gratis: archive.org, un repo de GitHub (Pages), Cloudflare R2 o cualquier enlace directo al archivo.',
+              'où héberger gratuitement : archive.org, un dépôt GitHub (Pages), Cloudflare R2, ou tout lien direct vers le fichier.',
+              '免费托管的地方：archive.org、GitHub 仓库（Pages）、Cloudflare R2，或任何指向文件的直链。',
+              'где разместить бесплатно: archive.org, репозиторий GitHub (Pages), Cloudflare R2 или любая прямая ссылка на файл.',
+              'де розмістити безкоштовно: archive.org, репозиторій GitHub (Pages), Cloudflare R2 або будь-яке пряме посилання на файл.',
+              'أماكن استضافة مجانية: archive.org أو مستودع GitHub‏ (Pages) أو Cloudflare R2 أو أي رابط مباشر للملف.'],
+syncedNote:  ['programação sincronizada — todos ouvem o mesmo instante','synced schedule — everyone hears the same instant','programación sincronizada — todos oyen el mismo instante','grille synchronisée — tout le monde entend le même instant','同步节目 — 所有人听到同一时刻','синхронная программа — все слышат один и тот же момент','синхронна програма — усі чують той самий момент','جدول متزامن — الجميع يسمع اللحظة نفسها'],
+
+/* --- cena --- */
+yourStation: ['sua estação','your station','tu emisora','votre station','你的电台','ваша станция','ваша станція','محطتك'],
+onAirT:      ['no ar','on air','al aire','en direct','播出中','в эфире','в ефірі','على الهواء'],
+offAirT:     ['fora do ar','off air','fuera del aire','hors antenne','未播出','не в эфире','не в ефірі','خارج الهواء'],
+backToMap:   ['voltar ao mapa','back to the map','volver al mapa','retour à la carte','返回地图','назад к карте','назад до карти','العودة للخريطة'],
+transmissionT:['transmissão','transmission','transmisión','émission','广播','передача','передача','البث'],
+turnOn:      ['ligar','turn on','encender','allumer','开启','включить','увімкнути','تشغيل'],
+turnOff:     ['desligar','turn off','apagar','éteindre','关闭','выключить','вимкнути','إيقاف'],
+ambientT:    ['ambiente','ambience','ambiente','ambiance','环境音','фон','фон','الأجواء'],
+rainT:       ['chuva','rain','lluvia','pluie','雨','дождь','дощ','مطر'],
+windT:       ['vento','wind','viento','vent','风','ветер','вітер','رياح'],
+fireT:       ['fogueira','fire','fogata','feu','篝火','костёр','багаття','نار'],
+cricketsT:   ['grilos','crickets','grillos','grillons','蟋蟀','сверчки','цвіркуни','صراصير'],
+hourT:       ['hora','hour','hora','heure','时间','время','час','الساعة'],
+nowT:        ['agora','now','ahora','maintenant','此刻','сейчас','зараз','الآن'],
+dawnT:       ['amanhecer','dawn','amanecer','aube','黎明','рассвет','світанок','الفجر'],
+morningT:    ['manhã','morning','mañana','matin','早晨','утро','ранок','الصباح'],
+duskT:       ['entardecer','dusk','atardecer','crépuscule','黄昏','закат','присмерк','الغروب'],
+nightT:      ['noite','night','noche','nuit','夜晚','ночь','ніч','الليل'],
+sleepT:      ['dormir','sleep','dormir','sommeil','睡眠','сон','сон','النوم'],
+offT:        ['off','off','off','off','关','выкл','вимк','إيقاف'],
+playingNow:  ['no ar agora','playing now','al aire ahora','en cours','正在播放','сейчас играет','зараз грає','يُبثّ الآن'],
+yourTransm:  ['sua transmissão','your transmission','tu transmisión','votre émission','你的广播','ваша передача','ваша передача','بثّك'],
+
+/* --- visualizador --- */
+vWaves:      ['ondas','waves','ondas','ondes','波','волны','хвилі','موجات'],
+vRings:      ['anéis','rings','anillos','anneaux','环','кольца','кільця','حلقات'],
+vScope:      ['osciloscópio','scope','osciloscopio','oscilloscope','示波器','осциллограф','осцилограф','راسم'],
+vAurora:     ['aurora','aurora','aurora','aurore','极光','сияние','сяйво','شفق'],
+vTunnel:     ['túnel','tunnel','túnel','tunnel','隧道','туннель','тунель','نفق'],
+vAsh:        ['cinzas','ash','cenizas','cendres','灰烬','пепел','попіл','رماد'],
+closeT:      ['fechar','close','cerrar','fermer','关闭','закрыть','закрити','إغلاق'],
+vizHint:     ['mexa o mouse para os controles · esc para sair','move the mouse for controls · esc to exit','mueve el ratón para los controles · esc para salir','bougez la souris pour les commandes · échap pour sortir','移动鼠标显示控制 · esc 退出','подвиньте мышь для управления · esc для выхода','порухайте мишею для керування · esc для виходу','حرّك الفأرة لإظهار التحكم · esc للخروج'],
+realBeat:    ['batida real','real beat','ritmo real','vrai rythme','真实节拍','реальный бит','реальний біт','إيقاع حقيقي'],
+simBeat:     ['simulado','simulated','simulado','simulé','模拟','имитация','імітація','محاكاة'],
+
+/* --- avisos --- */
+tLostSignal: ['sinal perdido — essa estação não respondeu','signal lost — that station did not answer','señal perdida — esa emisora no respondió','signal perdu — cette station n’a pas répondu','信号丢失 — 该电台没有响应','сигнал потерян — станция не ответила','сигнал втрачено — станція не відповіла','فُقدت الإشارة — لم تستجب المحطة'],
+tNoRelay:    ['sem relay conectado — isto não sai daqui','no relay connected — this stays here','sin relay conectado — esto no sale de aquí','aucun relais connecté — ça ne sort pas d’ici','未连接中继 — 这条消息不会发出','нет подключённого релея — это отсюда не уйдёт','немає підключеного релею — це звідси не піде','لا مُرحِّل متصل — لن يخرج هذا من هنا'],
+tBroadcast:  ['transmitido — quem estiver no ar vai receber','broadcast — whoever is on air will get it','transmitido — quien esté al aire lo recibirá','émis — ceux qui sont en ligne le recevront','已广播 — 在线的人都会收到','передано — все, кто в эфире, получат','передано — усі, хто в ефірі, отримають','تم البث — سيصل لكل من هو على الهواء'],
+tOnAirNow:   ['sua rádio está no ar','your radio is on air','tu radio está al aire','votre radio est en ondes','你的电台已上线','ваше радио в эфире','ваше радіо в ефірі','إذاعتك على الهواء'],
+tNeedName:   ['precisa de nome e endereço do stream','name and stream address required','hace falta nombre y dirección del stream','il faut un nom et une adresse de flux','需要名称和流地址','нужны название и адрес потока','потрібні назва й адреса потоку','مطلوب اسم وعنوان بثّ'],
+tSaved:      ['salvo','saved','guardado','enregistré','已保存','сохранено','збережено','تم الحفظ'],
+tNoPerm:     ['sem permissão de localização','no location permission','sin permiso de ubicación','pas d’autorisation de localisation','没有定位权限','нет доступа к геолокации','немає доступу до геолокації','لا إذن للموقع'],
+tYouAppear:  ['você aparece no mapa, arredondado','you appear on the map, rounded','apareces en el mapa, redondeado','vous apparaissez sur la carte, arrondi','你已出现在地图上（位置已取整）','вы на карте, координаты округлены','ви на карті, координати округлені','تظهر على الخريطة بموقع مُقرَّب'],
+tYouGone:    ['você sumiu do mapa','you are off the map','desapareciste del mapa','vous avez disparu de la carte','你已从地图上消失','вы исчезли с карты','ви зникли з карти','اختفيت من الخريطة'],
+tGoodNight:  ['boa noite','good night','buenas noches','bonne nuit','晚安','спокойной ночи','на добраніч','تصبح على خير'],
+tNoCatalog:  ['não alcancei o catálogo de rádios — verifique a conexão','could not reach the radio catalog — check your connection','no alcancé el catálogo de radios — revisa la conexión','impossible d’atteindre le catalogue — vérifiez la connexion','无法访问电台目录 — 请检查网络','не удалось достучаться до каталога — проверьте связь','не вдалося дістатись каталогу — перевірте зв’язок','تعذّر الوصول إلى دليل الإذاعات — تحقق من الاتصال'],
+tCaptured:   ['estações captadas — procurando mais','stations captured — looking for more','emisoras captadas — buscando más','stations captées — recherche d’autres','个电台已捕获 — 继续搜索','станций поймано — ищем ещё','станцій зловлено — шукаємо ще','محطة تم التقاطها — ونبحث عن المزيد'],
+tSearchFail: ['a varredura falhou','the sweep failed','la búsqueda falló','le balayage a échoué','搜索失败','поиск не удался','пошук не вдався','فشل المسح'],
+tFirstRadio: ['coloque a sua rádio no ar primeiro — ela ganha a torre','put your radio on air first — then it gets the tower','pon tu radio al aire primero — después gana la torre','mettez d’abord votre radio en ondes — la tour vient ensuite','先让你的电台上线 — 然后才会有信号塔','сначала выпустите радио в эфир — потом появится башня','спершу випустіть радіо в ефір — потім з’явиться вежа','ابدأ بثّ إذاعتك أولاً — عندها تحصل على البرج'],
+tNoPrev:     ['não há estação anterior','no previous station','no hay emisora anterior','pas de station précédente','没有上一个电台','нет предыдущей станции','немає попередньої станції','لا محطة سابقة'],
+tBigImage:   ['imagem grande demais','image too large','imagen demasiado grande','image trop lourde','图片太大','изображение слишком большое','зображення завелике','الصورة كبيرة جداً'],
+tBadImage:   ['não consegui usar essa imagem','could not use that image','no pude usar esa imagen','impossible d’utiliser cette image','无法使用该图片','не удалось использовать это изображение','не вдалося використати це зображення','تعذّر استخدام هذه الصورة'],
+tWriteFirst: ['escreva alguma coisa','write something first','escribe algo','écrivez quelque chose','先写点什么','напишите что-нибудь','напишіть щось','اكتب شيئاً أولاً'],
+tNoteOnAir:  ['bilhete no ar','note is up','nota publicada','mot publié','留言已发布','записка опубликована','записку опубліковано','تم نشر الملاحظة'],
+tNoTracks:   ['adicione pelo menos uma faixa','add at least one track','añade al menos una pista','ajoutez au moins un morceau','至少添加一首曲目','добавьте хотя бы один трек','додайте хоча б один трек','أضف مقطعاً واحداً على الأقل'],
+tReading:    ['lendo a faixa…','reading the track…','leyendo la pista…','lecture du morceau…','读取曲目中…','читаем трек…','читаємо трек…','جارٍ قراءة المقطع…'],
+tBadTrack:   ['não consegui ler essa faixa','could not read that track','no pude leer esa pista','impossible de lire ce morceau','无法读取该曲目','не удалось прочитать трек','не вдалося прочитати трек','تعذّر قراءة هذا المقطع'],
+alreadyLang: ['(já está no seu idioma)','(already in your language)','(ya está en tu idioma)','(déjà dans votre langue)','（已经是你的语言）','(уже на вашем языке)','(вже вашою мовою)','(بلغتك أصلاً)'],
+trFail:      ['(não consegui traduzir esse par)','(could not translate that pair)','(no pude traducir ese par)','(traduction impossible)','（无法翻译该语言对）','(не удалось перевести эту пару)','(не вдалося перекласти цю пару)','(تعذّرت الترجمة لهذا الزوج)'],
+tNothingFound:['nada encontrado — o mundo continua aí','nothing found — the world is still there','nada encontrado — el mundo sigue ahí','rien trouvé — le monde est toujours là','没有找到 — 世界还在','ничего не найдено — мир на месте','нічого не знайдено — світ на місці','لا نتائج — العالم ما زال هناك'],
+autoTr:      ['tradução automática','auto-translate','traducción automática','traduction auto','自动翻译','автоперевод','автопереклад','ترجمة تلقائية'],
+onAirCount:  ['no ar','on air','al aire','en ligne','在线','в эфире','в ефірі','على الهواء'],
+seenCount:   ['já passaram','have passed through','ya pasaron','déjà passés','曾经过','уже прошли','вже пройшли','مرّوا من هنا'],
+speakWorld:  ['falar ao mundo','speak to the world','hablar al mundo','parler au monde','向世界说话','сказать миру','сказати світу','تحدّث للعالم'],
+coverT:      ['capa da rádio','station cover','portada','pochette','电台封面','обложка','обкладинка','غلاف المحطة'],
+coverHint:   ['uma imagem que aparece como a cara da sua rádio no mapa e na lista','an image that becomes the face of your radio on the map and in the list','una imagen que será la cara de tu radio en el mapa y la lista','une image qui devient le visage de votre radio sur la carte et dans la liste','一张作为你电台门面的图片，会显示在地图和列表中','картинка — лицо вашего радио на карте и в списке','картинка — обличчя вашого радіо на карті та в списку','صورة تصبح واجهة إذاعتك على الخريطة وفي القائمة'],
+trOffline:   ['(tradução fora do ar)','(translation offline)','(traducción fuera de línea)','(traduction hors ligne)','（翻译服务不可用）','(перевод недоступен)','(переклад недоступний)','(الترجمة غير متاحة)']
+});
+
+/* ---- motor ---- */
+const LANG_KEYS = Object.keys(LANGS);
+let LANG = localStorage.getItem('as:lang');
+if (!LANG || !LANGS[LANG]){
+  const n = (navigator.language||'pt').slice(0,2).toLowerCase();
+  LANG = LANGS[n] ? n : (n==='pt'?'pt':'en');
+}
+function langIdx(){ const i = LANG_KEYS.indexOf(LANG); return i<0?0:i; }
+function t(k){
+  const row = T[k];
+  if (!row) return k;
+  return row[langIdx()] || row[0];
+}
+function setLang(l){
+  if (!LANGS[l]) return;
+  LANG = l;
+  localStorage.setItem('as:lang', l);
+  document.documentElement.lang = l;
+  document.documentElement.dir = LANGS[l].rtl ? 'rtl' : 'ltr';
+  applyStatic();
+}
+function applyStatic(){
+  document.querySelectorAll('[data-i18n]').forEach(el=>{ el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el=>{ el.placeholder = t(el.dataset.i18nPh); });
+  const lp = document.getElementById('langPick');
+  if (lp && !lp.dataset.built){
+    lp.dataset.built='1';
+    lp.innerHTML = Object.keys(LANGS).map(k=>
+      `<button class="sbtn${k===LANG?' on':''}" data-lang="${k}" style="border-radius:2px">${LANGS[k].name}</button>`).join('');
+    lp.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>{
+      setLang(b.dataset.lang);
+      lp.querySelectorAll('[data-lang]').forEach(x=>x.classList.toggle('on',x.dataset.lang===LANG));
+    });
+  }
+  try{ if (typeof updateCounters==='function') updateCounters(); }catch(e){}
+  const bs=document.getElementById('bSpeak'); if (bs) bs.title=t('speakWorld');
+  const sb=document.getElementById('syncBtn');
+  if (sb && typeof S !== 'undefined') sb.textContent=(S.sync?'■ ':'▶ ')+t('syncOn');
+  ['prev','next','bViz'].forEach((id,i)=>{
+    const el=document.getElementById(id);
+    if (el) el.title = t(['prevT','nextT','expandT'][i]);
+  });
+  if (typeof S !== 'undefined' && S.stations){        // re-render do que estiver aberto
+    try{
+      renderStation(); renderRoom(); renderGlobal(); renderMural(); renderMinha();
+      syncSceneUI(); syncVizUI();
+      if (S.current){
+        document.getElementById('nowMeta').textContent =
+          [S.current.mine?t('yourRadio'):(S.current.remote?t('radioOf')+' '+(S.current.by||t('somebody')):S.current.country),
+           S.current.state, S.current.codec, S.current.bitrate?S.current.bitrate+'kbps':''].filter(Boolean).join(' · ');
+        document.getElementById('nowName').textContent = S.current.name;
+      }
+    }catch(e){}
+  }
+}
+
+/* ----------------------------- SHA-256 ----------------------------- */
+const SHA_K = (()=> {
+  const k=[]; let n=2; const isP=x=>{for(let i=2;i*i<=x;i++) if(x%i===0) return false; return true;};
+  const pr=[]; while(pr.length<64){ if(isP(n)) pr.push(n); n++; }
+  for(const p of pr) k.push(Math.floor((Math.cbrt(p)%1)*2**32)>>>0);
+  return k;
+})();
+const SHA_H0 = [2,3,5,7,11,13,17,19].map(p => Math.floor((Math.sqrt(p)%1)*2**32)>>>0);
+
+function sha256(bytes){
+  const ml=bytes.length;
+  const buf=new Uint8Array((((ml+9)+63)>>6)<<6);
+  buf.set(bytes); buf[ml]=0x80;
+  const dv=new DataView(buf.buffer);
+  dv.setUint32(buf.length-4,(ml*8)>>>0);
+  dv.setUint32(buf.length-8,Math.floor(ml*8/2**32));
+  const H=SHA_H0.slice(), w=new Uint32Array(64);
+  const rr=(x,n)=>((x>>>n)|(x<<(32-n)))>>>0;
+  for(let off=0;off<buf.length;off+=64){
+    for(let i=0;i<16;i++) w[i]=dv.getUint32(off+i*4);
+    for(let i=16;i<64;i++){
+      const s0=(rr(w[i-15],7)^rr(w[i-15],18)^(w[i-15]>>>3))>>>0;
+      const s1=(rr(w[i-2],17)^rr(w[i-2],19)^(w[i-2]>>>10))>>>0;
+      w[i]=(w[i-16]+s0+w[i-7]+s1)>>>0;
+    }
+    let [a,b,c,d,e,f,g,h]=H;
+    for(let i=0;i<64;i++){
+      const S1=(rr(e,6)^rr(e,11)^rr(e,25))>>>0, ch=((e&f)^((~e)&g))>>>0;
+      const t1=(h+S1+ch+SHA_K[i]+w[i])>>>0;
+      const S0=(rr(a,2)^rr(a,13)^rr(a,22))>>>0, mj=((a&b)^(a&c)^(b&c))>>>0;
+      const t2=(S0+mj)>>>0;
+      h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;
+    }
+    const v=[a,b,c,d,e,f,g,h];
+    for(let i=0;i<8;i++) H[i]=(H[i]+v[i])>>>0;
+  }
+  const out=new Uint8Array(32), odv=new DataView(out.buffer);
+  for(let i=0;i<8;i++) odv.setUint32(i*4,H[i]);
+  return out;
+}
+
+/* ------------------- secp256k1 + schnorr (BIP-340) ------------------- */
+const CP = 2n**256n-2n**32n-977n;
+const CN = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141n;
+const CGj = [0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n,
+             0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8n, 1n];
+const cmod=(a,m=CP)=>{const r=a%m; return r>=0n?r:r+m;};
+const cpow=(b,e,m=CP)=>{let r=1n;b=cmod(b,m);while(e>0n){if(e&1n)r=cmod(r*b,m);b=cmod(b*b,m);e>>=1n;}return r;};
+const cinv=(a,m=CP)=>cpow(cmod(a,m),m-2n,m);
+function jDbl([X,Y,Z]){
+  if(Y===0n) return [0n,1n,0n];
+  const A=cmod(X*X),B=cmod(Y*Y),C=cmod(B*B);
+  const D=cmod(2n*(cmod((X+B)*(X+B))-A-C)), E=cmod(3n*A), F=cmod(E*E);
+  const X3=cmod(F-2n*D);
+  return [X3, cmod(E*(D-X3)-8n*C), cmod(2n*Y*Z)];
+}
+function jAdd(p,q){
+  const [X1,Y1,Z1]=p,[X2,Y2,Z2]=q;
+  if(Z1===0n) return q; if(Z2===0n) return p;
+  const Z1Z1=cmod(Z1*Z1), Z2Z2=cmod(Z2*Z2);
+  const U1=cmod(X1*Z2Z2), U2=cmod(X2*Z1Z1);
+  const S1=cmod(Y1*Z2*Z2Z2), S2=cmod(Y2*Z1*Z1Z1);
+  const Hh=cmod(U2-U1), r=cmod(S2-S1);
+  if(Hh===0n) return r===0n?jDbl(p):[0n,1n,0n];
+  const HH=cmod(Hh*Hh), HHH=cmod(Hh*HH), V=cmod(U1*HH);
+  const X3=cmod(r*r-HHH-2n*V);
+  return [X3, cmod(r*(V-X3)-S1*HHH), cmod(Z1*Z2*Hh)];
+}
+function jMul(k,p){ let r=[0n,1n,0n],a=p; while(k>0n){ if(k&1n) r=jAdd(r,a); a=jDbl(a); k>>=1n; } return r; }
+function jAff([X,Y,Z]){ if(Z===0n) return null; const iz=cinv(Z), iz2=cmod(iz*iz);
+  return [cmod(X*iz2), cmod(Y*iz2*iz)]; }
+
+const b2h = b => [...b].map(x=>x.toString(16).padStart(2,'0')).join('');
+const h2b = h => new Uint8Array(h.match(/../g).map(x=>parseInt(x,16)));
+const n2b = n => h2b(n.toString(16).padStart(64,'0'));
+const b2n = b => BigInt('0x'+(b2h(b)||'0'));
+const bcat = (...a)=>{ const t=new Uint8Array(a.reduce((s,x)=>s+x.length,0)); let o=0;
+  for(const x of a){ t.set(x,o); o+=x.length; } return t; };
+const utf8 = s => new TextEncoder().encode(s);
+
+const TAGC={};
+function tagged(tag,...msgs){
+  if(!TAGC[tag]) TAGC[tag]=sha256(utf8(tag));
+  const t=TAGC[tag];
+  return sha256(bcat(t,t,...msgs));
+}
+function pubFromPriv(sk){ return n2b(jAff(jMul(b2n(sk),CGj))[0]); }
+function schnorrSign(msg32, sk32, aux32){
+  const d0=b2n(sk32);
+  if(d0<=0n||d0>=CN) throw new Error('chave inválida');
+  const Pa=jAff(jMul(d0,CGj));
+  const d=(Pa[1]&1n)===0n?d0:CN-d0;
+  const t=n2b(d ^ b2n(tagged('BIP0340/aux',aux32)));
+  const k0=cmod(b2n(tagged('BIP0340/nonce',t,n2b(Pa[0]),msg32)),CN);
+  if(k0===0n) throw new Error('nonce nulo');
+  const Ra=jAff(jMul(k0,CGj));
+  const k=(Ra[1]&1n)===0n?k0:CN-k0;
+  const e=cmod(b2n(tagged('BIP0340/challenge',n2b(Ra[0]),n2b(Pa[0]),msg32)),CN);
+  return bcat(n2b(Ra[0]), n2b(cmod(k+e*d,CN)));
+}
+
+/* ------------------------------ NOSTR ------------------------------ */
+const RELAYS = [
+  'wss://relay.damus.io',
+  'wss://nos.lol',
+  'wss://relay.nostr.band',
+  'wss://relay.primal.net',
+  'wss://nostr.mom'
+];
+const APP_TAG = 'aftersignal';
+const K_PRESENCE = 20100;   // efêmero: quem está no ar agora
+const K_CHAT     = 1;       // nota comum, marcada com a hashtag do app
+const K_APPDATA  = 30078;   // NIP-78: mural e a rádio pessoal (substituível)
+
+const NOSTR = (function(){
+  let sk=null, pk=null;
+  const socks = new Map();          // url -> {ws, ok}
+  const subs  = new Map();          // subId -> {filters, onEvent}
+  const seen  = new Set();
+  let onStatus = ()=>{};
+
+  function keys(){
+    if (sk) return {sk,pk};
+    let hex = localStorage.getItem('as:sk');
+    if (!hex || hex.length !== 64){
+      const r = new Uint8Array(32);
+      (crypto.getRandomValues ? crypto : window.msCrypto).getRandomValues(r);
+      hex = b2h(r);
+      localStorage.setItem('as:sk', hex);
+    }
+    sk = h2b(hex); pk = b2h(pubFromPriv(sk));
+    return {sk,pk};
+  }
+
+  function serialize(ev){
+    return JSON.stringify([0, ev.pubkey, ev.created_at, ev.kind, ev.tags, ev.content]);
+  }
+  function finalize(ev){
+    const {sk,pk} = keys();
+    ev.pubkey = pk;
+    ev.created_at = ev.created_at || Math.floor(Date.now()/1000);
+    ev.tags = ev.tags || [];
+    ev.content = ev.content || '';
+    const idb = sha256(utf8(serialize(ev)));
+    ev.id = b2h(idb);
+    const aux = new Uint8Array(32); crypto.getRandomValues(aux);
+    ev.sig = b2h(schnorrSign(idb, sk, aux));
+    return ev;
+  }
+
+  function status(){
+    let up=0; for(const s of socks.values()) if(s.ok) up++;
+    onStatus(up, RELAYS.length);
+    return up;
+  }
+
+  function connect(url){
+    let st = socks.get(url);
+    if (st && st.ws && (st.ws.readyState===0 || st.ws.readyState===1)) return;
+    let ws;
+    try{ ws = new WebSocket(url); }catch(e){ return; }
+    st = {ws, ok:false, tries:(st?st.tries:0)+1};
+    socks.set(url, st);
+    ws.onopen = ()=>{
+      st.ok = true; st.tries = 0; status();
+      for (const [id,s] of subs) send(ws, ['REQ', id, ...s.filters]);
+    };
+    ws.onclose = ()=>{
+      st.ok = false; status();
+      const wait = Math.min(60000, 3000*Math.pow(1.7, Math.min(st.tries,6)));
+      setTimeout(()=>connect(url), wait);
+    };
+    ws.onerror = ()=>{ try{ ws.close(); }catch(e){} };
+    ws.onmessage = m => {
+      let d; try{ d = JSON.parse(m.data); }catch(e){ return; }
+      if (d[0] === 'EVENT'){
+        const ev = d[2];
+        if (!ev || seen.has(ev.id)) return;
+        seen.add(ev.id);
+        if (seen.size > 4000) seen.clear();
+        const s = subs.get(d[1]);
+        if (s) try{ s.onEvent(ev); }catch(e){}
+      }
+    };
+  }
+  function send(ws, msg){ try{ if (ws.readyState===1) ws.send(JSON.stringify(msg)); }catch(e){} }
+  function broadcast(msg){ for (const s of socks.values()) if (s.ok) send(s.ws, msg); }
+
+  return {
+    start(cb){
+      onStatus = cb || (()=>{});
+      keys();
+      RELAYS.forEach(connect);
+      setInterval(()=>{ RELAYS.forEach(connect); status(); }, 25000);
+    },
+    me(){ return keys().pk; },
+    up(){ let n=0; for(const s of socks.values()) if(s.ok) n++; return n; },
+    sub(id, filters, onEvent){
+      if (subs.has(id)) this.unsub(id);
+      subs.set(id, {filters, onEvent});
+      broadcast(['REQ', id, ...filters]);
+    },
+    unsub(id){ if (subs.has(id)){ broadcast(['CLOSE', id]); subs.delete(id); } },
+    publish(ev){
+      const full = finalize(ev);
+      seen.add(full.id);
+      broadcast(['EVENT', full]);
+      return full;
+    },
+    K:{presence:K_PRESENCE, chat:K_CHAT, app:K_APPDATA}, tag:APP_TAG
+  };
+})();
+
+/* ========================== ESTADO E UTILIDADES ========================== */
+const SERVERS = [
+  'https://all.api.radio-browser.info','https://de1.api.radio-browser.info',
+  'https://de2.api.radio-browser.info','https://nl1.api.radio-browser.info',
+  'https://at1.api.radio-browser.info'
+];
+const PAGE = 8000, PAGES = 4;
+const LS = k => 'as:'+k;
+
+const S = {
+  stations:[], byId:{}, marks:{},
+  current:null, list:[], offset:0, done:false,
+  me: localStorage.getItem(LS('nick')) || 'anônimo',
+  favs: new Set(JSON.parse(localStorage.getItem(LS('favs'))||'[]')),
+  onlyHttps:true, onlyFav:false, onlyMine:false,
+  sync:false, syncLeft:0, history:[], hpos:-1,
+  level:0.16, bands:new Array(24).fill(0.1), sleepAt:0,
+  people:new Map(), pmarks:{}, share:JSON.parse(localStorage.getItem(LS('share'))||'null'),
+  chat:{global:[], room:[]}, mural:[], unread:0, vizMode:'waves',
+  autoTr: load('autoTr', true),
+  seen: new Set(JSON.parse(localStorage.getItem('as:seen')||'[]'))
+};
+
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const esc = s => String(s??'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+const uid = () => (crypto.randomUUID?crypto.randomUUID():'id-'+Date.now().toString(36)+Math.random().toString(36).slice(2,8));
+let toastT;
+function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('on');
+  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'),3400); }
+function save(k,v){ try{ localStorage.setItem(LS(k),JSON.stringify(v)); }catch(e){} }
+function load(k,d){ try{ const v=localStorage.getItem(LS(k)); return v===null?d:JSON.parse(v); }catch(e){ return d; } }
+const shortId = p => p ? p.slice(0,4)+'·'+p.slice(-4) : '????';
+
+async function api(path){
+  for (const base of SERVERS){
+    try{ const r = await fetch(base+path,{headers:{'Accept':'application/json'}});
+         if (r.ok) return await r.json(); }catch(e){}
+  }
+  throw new Error('nenhum servidor respondeu');
+}
+
+/* ================================ MAPA ================================ */
+const map = L.map('map',{preferCanvas:true, worldCopyJump:true, minZoom:2, maxZoom:12}).setView([10,0],3);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',{
+  attribution:'&copy; OpenStreetMap &copy; CARTO · estações: Radio Browser · rede: Nostr',
+  subdomains:'abcd', maxZoom:12}).addTo(map);
+const rend = L.canvas({padding:0.4});
+const layer = L.layerGroup().addTo(map);
+const players = L.layerGroup().addTo(map);
+let halo = null;
+
+const COLOR = st => st.mine ? '#6dff9e' : (st.remote ? '#a86bff' : '#ffa53d');
+
+function addDot(st){
+  const r = (st.mine||st.remote) ? 6 : Math.min(6, 2+Math.log10((st.clickcount||1)+1)*1.5);
+  const c = L.circleMarker([st.geo_lat,st.geo_long],{
+    renderer:rend, radius:r, stroke:(st.mine||st.remote), color:'#050408', weight:1.5,
+    fillColor:COLOR(st), fillOpacity:(st.mine||st.remote)?.95:.70});
+  c.on('click',()=>playStation(st));
+  c.bindTooltip(`${esc(st.name)}${st.country?' · '+esc(st.country):''}`+
+    (st.mine?' · SUA':(st.remote?' · de '+esc(st.by||'alguém'):'')),{direction:'top',offset:[0,-4]});
+  c.addTo(layer);
+  S.marks[st.stationuuid]={c,r};
+}
+function visible(){
+  return S.stations.filter(st=>{
+    if (S.onlyMine) return !!(st.mine||st.remote);
+    if (st.mine||st.remote) return !S.onlyFav || S.favs.has(st.stationuuid);
+    if (S.onlyHttps && !/^https:/i.test(st.url_resolved||st.url)) return false;
+    if (S.onlyFav && !S.favs.has(st.stationuuid)) return false;
+    return true;
+  });
+}
+function drawMap(){
+  layer.clearLayers(); S.marks={};
+  for (const st of visible()) addDot(st);
+  if (S.current) markLive(S.current);
+  $('#status').textContent = Object.keys(S.marks).length.toLocaleString(LANG)+(S.done?' '+t('points'):'…');
+}
+function markLive(st){
+  if (halo){ map.removeLayer(halo); halo=null; }
+  if (!st || !st.geo_lat) return;
+  halo = L.marker([st.geo_lat,st.geo_long],{interactive:false,zIndexOffset:900,icon:L.divIcon({
+    className:'',iconSize:[14,14],iconAnchor:[7,7],
+    html:`<div class="halo${st.mine?' mine':''}" style="width:14px;height:14px"></div>`})}).addTo(map);
+}
+
+/* ---------------------------- carregamento ---------------------------- */
+async function loadPage(){
+  const d = await api(`/json/stations/search?limit=${PAGE}&offset=${S.offset}&hidebroken=true`
+                     +`&has_geo_info=true&order=clickcount&reverse=true`);
+  S.offset += PAGE;
+  if (!d.length || d.length < PAGE) S.done = true;
+  for (const s of d){
+    if (!s.geo_lat||!s.geo_long||!(s.url_resolved||s.url)) continue;
+    if (S.byId[s.stationuuid]) continue;
+    S.byId[s.stationuuid]=s; S.stations.push(s);
+  }
+}
+function loadMine(){
+  for (const s of load('mine',[])){
+    s.mine=true;
+    if (!S.byId[s.stationuuid]){ S.byId[s.stationuuid]=s; S.stations.push(s); }
+  }
+}
+/* Rádios pequenas raramente aparecem entre as mais clicadas. Estas etiquetas
+   são as que a gente comum usa quando registra a própria estação. */
+const GRASSROOTS = ['community','independent','college','campus','freeform','pirate',
+                    'underground','local','amateur','diy','lofi','experimental','podcast',
+                    'comunitaria','radio libre','associativa','noncommercial'];
+async function loadGrassroots(){
+  for (const tag of GRASSROOTS){
+    try{
+      const d = await api('/json/stations/search?limit=600&hidebroken=true&has_geo_info=true'
+                         +'&order=clickcount&reverse=true&tag='+encodeURIComponent(tag));
+      let n=0;
+      for (const x of d){
+        if (!x.geo_lat||!x.geo_long||!(x.url_resolved||x.url)) continue;
+        if (S.byId[x.stationuuid]) continue;
+        x.grass = true;
+        S.byId[x.stationuuid]=x; S.stations.push(x); n++;
+      }
+      if (n) drawMap();
+    }catch(e){}
+  }
+  $('#status').textContent = Object.keys(S.marks).length.toLocaleString(LANG)+' '+t('points');
+}
+
+async function boot(){
+  $('#status').textContent=t('tracking');
+  loadMine(); drawMap(); netStart();
+  try{
+    await loadPage(); S.list=S.stations; drawMap();
+    toast(S.stations.length.toLocaleString(LANG)+' '+t('tCaptured'));
+    for (let i=1;i<PAGES && !S.done;i++){ await loadPage(); drawMap(); }
+    $('#status').textContent = Object.keys(S.marks).length.toLocaleString(LANG)+' '+t('points');
+    loadGrassroots();
+  }catch(e){
+    $('#status').textContent=t('mutedCat');
+    toast(t('tNoCatalog'));
+  }
+}
+
+/* =============================== ÁUDIO =============================== */
+const audio = new Audio();
+audio.volume = 0.8;
+let hls = null;
+
+let playSeq = 0;
+const preconnected = new Set();
+function preconnect(url){
+  try{
+    const o = new URL(url).origin;
+    if (preconnected.has(o)) return; preconnected.add(o);
+    for (const rel of ['preconnect','dns-prefetch']){
+      const l=document.createElement('link'); l.rel=rel; l.href=o; l.crossOrigin='anonymous';
+      document.head.appendChild(l);
+    }
+  }catch(e){}
+}
+function playStation(st, fromHistory){
+  if (!st) return;
+  const seq = ++playSeq;
+  S.current = st;
+  S.schedule = null;
+  if (!fromHistory){
+    S.history = S.history.slice(0, S.hpos+1);
+    if (S.history[S.history.length-1] !== st.stationuuid) S.history.push(st.stationuuid);
+    S.hpos = S.history.length-1;
+  }
+  if (hls){ try{ hls.destroy(); }catch(e){} hls=null; }
+  try{ audio.pause(); audio.removeAttribute('src'); audio.load(); }catch(e){}   // solta a conexão anterior na hora
+
+  $('#play').classList.add('loading');
+  $('#nowName').textContent = st.name;
+  $('#nowMeta').textContent = [st.mine?t('yourRadio'):(st.remote?t('radioOf')+' '+(st.by||t('somebody')):st.country),
+                               st.state, st.codec, st.bitrate?st.bitrate+'kbps':''].filter(Boolean).join(' · ');
+  markLive(st);
+  renderStation(); subRoom(); renderMural(); syncSceneUI(); syncVizUI(); pushPresence();
+  if (map.getZoom()<4 && st.geo_lat) map.flyTo([st.geo_lat,st.geo_long],5,{duration:1.1});
+
+  clearTimeout(playStation._wd);
+  playStation._wd = setTimeout(()=>{ if (seq===playSeq && audio.paused) fail(); }, 12000);
+
+  if (st.kind==='schedule'){ playSchedule(st); probeAnalyser(); return; }
+  if (st.kind==='local'){
+    audio.src = st.local[st.li||0];
+    audio.play().catch(fail); probeAnalyser(); return;
+  }
+
+  const url = st.url_resolved || st.url;
+  preconnect(url);
+  if (/\.m3u8(\?|$)/i.test(url) && window.Hls && Hls.isSupported()){
+    hls = new Hls({liveDurationInfinity:true, lowLatencyMode:true, maxBufferLength:12});
+    hls.loadSource(url); hls.attachMedia(audio);
+    hls.on(Hls.Events.MANIFEST_PARSED,()=>{ if(seq===playSeq) audio.play().catch(fail); });
+    hls.on(Hls.Events.ERROR,(_,d)=>{ if(d.fatal && seq===playSeq) fail(); });
+  } else {
+    audio.src=url;
+    audio.play().catch(fail);
+  }
+  probeAnalyser();
+  if (!st.mine && !st.remote) fetch(SERVERS[0]+'/json/url/'+st.stationuuid).catch(()=>{});
+}
+
+/* prepara a próxima do sincronizador enquanto a atual toca */
+function warmNext(){
+  const pool = visible();
+  if (!pool.length) return;
+  const s2 = pool[Math.floor(Math.random()*pool.length)];
+  if (s2 && (s2.url_resolved||s2.url)) preconnect(s2.url_resolved||s2.url);
+}
+
+function fail(){
+  $('#play').classList.remove('loading');
+  toast(t('tLostSignal'));
+  if (S.sync) setTimeout(nextStation,600);
+}
+audio.addEventListener('playing',()=>{ $('#play').classList.remove('loading'); setPlayIcon(true);
+  syncSceneUI(); syncVizUI(); pushPresence(); });
+audio.addEventListener('pause',()=>{ setPlayIcon(false); syncSceneUI(); syncVizUI(); });
+audio.addEventListener('error',fail);
+
+function setPlayIcon(p){
+  $('#play').innerHTML = p
+    ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>'
+    : '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+  $('#vzPlay').textContent = p ? '■' : '▶';
+}
+function togglePlay(){
+  if (!S.current){ const v=visible(); if(v.length) playStation(v[Math.floor(Math.random()*v.length)]); return; }
+  audio.paused ? audio.play().catch(fail) : audio.pause();
+}
+function prevStation(){
+  if (S.hpos > 0){ S.hpos--; playStation(S.byId[S.history[S.hpos]], true); }
+  else toast(t('tNoPrev'));
+}
+$('#play').onclick = togglePlay;
+$('#prev').onclick = prevStation;
+$('#next').onclick = ()=> nextStation();
+$('#vol').oninput = e => { audio.volume=e.target.value/100; $('#scVol').value=e.target.value; };
+
+/* ---------------------------------------------------------------------
+   BATIDA REAL — opcional.
+   O stream principal nunca passa pelo WebAudio (se o servidor não mandar
+   cabeçalho CORS, isso deixaria o som MUDO). Em vez disso, quando o ouvinte
+   pede "batida real", abrimos um segundo elemento de áudio, silencioso, com
+   crossOrigin, e é dele que sai a análise de frequência. Se o servidor não
+   permitir, nada acontece e seguimos no modo simulado.
+   --------------------------------------------------------------------- */
+let AC2=null, ANALY=null, aSpy=null, spyBuf=null;
+let realBeat=false, beatEnv=0, beatLast=0;
+const corsCache = new Map();
+
+async function probeCORS(url){
+  let origin; try{ origin=new URL(url).origin; }catch(e){ return false; }
+  if (corsCache.has(origin)) return corsCache.get(origin);
+  let ok=false;
+  try{
+    const ctl=new AbortController();
+    const to=setTimeout(()=>ctl.abort(), 4000);
+    const r=await fetch(url,{method:'GET', mode:'cors', headers:{'Range':'bytes=0-1'}, signal:ctl.signal});
+    clearTimeout(to); ok = r.ok || r.status===206 || r.status===200;
+    try{ ctl.abort(); }catch(e){}
+  }catch(e){ ok=false; }
+  corsCache.set(origin, ok);
+  return ok;
+}
+function probeAnalyser(){ if (realBeat) stopRealBeat(true); }
+
+function stopRealBeat(silent){
+  realBeat=false;
+  if (aSpy){ try{ aSpy.pause(); aSpy.removeAttribute('src'); aSpy.load(); }catch(e){} aSpy=null; }
+  ANALY=null;
+  if (!silent) syncVizUI();
+}
+async function startRealBeat(){
+  const st=S.current; if(!st) return false;
+  const url = st.kind==='schedule' ? (S.schedule&&S.schedule.st.tracks[S.schedule.i].u) : (st.url_resolved||st.url);
+  if (!url) return false;
+  if (!await probeCORS(url)) return false;
+  try{
+    AC2 = AC2 || new (window.AudioContext||window.webkitAudioContext)();
+    if (AC2.state==='suspended') await AC2.resume();
+    aSpy = new Audio();
+    aSpy.crossOrigin='anonymous'; aSpy.src=url; aSpy.preload='auto';
+    const src = AC2.createMediaElementSource(aSpy);
+    ANALY = AC2.createAnalyser();
+    ANALY.fftSize = 512; ANALY.smoothingTimeConstant = 0.62;
+    const mute = AC2.createGain(); mute.gain.value = 0.00001;   // ouvido não escuta; o analisador escuta
+    src.connect(ANALY); ANALY.connect(mute); mute.connect(AC2.destination);
+    spyBuf = new Uint8Array(ANALY.frequencyBinCount);
+    await aSpy.play();
+    realBeat = true;
+    return true;
+  }catch(e){ stopRealBeat(true); return false; }
+}
+
+/* nível por bandas — real quando disponível, simulado quando não */
+setInterval(()=>{
+  const on = !audio.paused && S.current;
+  if (realBeat && ANALY){
+    ANALY.getByteFrequencyData(spyBuf);
+    const n=S.bands.length, per=Math.floor(spyBuf.length/n);
+    let bass=0;
+    for (let i=0;i<n;i++){
+      let sum=0; for (let k=0;k<per;k++) sum+=spyBuf[i*per+k];
+      const v=(sum/per)/255;
+      S.bands[i]=S.bands[i]*0.35+v*0.65;
+      if (i<3) bass+=v;
+    }
+    bass/=3;
+    /* detector de batida: energia grave acima de um limiar que se adapta */
+    beatEnv = beatEnv*0.94 + bass*0.06;
+    const hit = bass > beatEnv*1.32 && bass > 0.16 && (performance.now()-beatLast) > 190;
+    if (hit){ beatLast=performance.now(); S.level=Math.min(1, 0.55+bass*0.75); }
+    else S.level = S.level*0.86 + bass*0.14;
+  } else {
+    S.level = on ? S.level*0.55+(0.35+Math.random()*0.65)*0.45 : S.level*0.86+0.14*0.14;
+    for (let i=0;i<S.bands.length;i++){
+      const w = 1 - i/S.bands.length*0.55;
+      const target = on ? Math.pow(Math.random(),1.5)*w*1.25 + 0.05 : 0.04;
+      S.bands[i] = S.bands[i]*0.62 + target*0.38;
+    }
+  }
+  $$('#bars b').forEach((b,i)=> b.style.height = (on||realBeat) ? (16+S.bands[i*3]*84)+'%' : '16%');
+}, 70);
+
+/* ---------------------------- sincronizador ---------------------------- */
+function distance(a,b){
+  const dx=(a.geo_long-b.geo_long)*Math.cos((a.geo_lat+b.geo_lat)*Math.PI/360), dy=a.geo_lat-b.geo_lat;
+  return Math.sqrt(dx*dx+dy*dy);
+}
+function nextStation(){
+  const pool = visible().filter(s=>s.stationuuid!==(S.current&&S.current.stationuuid));
+  if (!pool.length) return;
+  const mode=$('#syncMode').value; let next;
+  if (!S.current||mode==='random') next=pool[Math.floor(Math.random()*pool.length)];
+  else if (mode==='near'){
+    const near=pool.map(s=>({s,d:distance(S.current,s)})).sort((a,b)=>a.d-b.d).slice(0,14);
+    next=near[Math.floor(Math.random()*near.length)].s;
+  } else if (mode==='country'){
+    const same=pool.filter(s=>s.countrycode===S.current.countrycode);
+    next=(same.length?same:pool)[Math.floor(Math.random()*(same.length||pool.length))];
+  } else if (mode==='tag'){
+    const tags=(S.current.tags||'').split(',').filter(Boolean);
+    const same=tags.length?pool.filter(s=>tags.some(t=>(s.tags||'').includes(t))):[];
+    next=(same.length?same:pool)[Math.floor(Math.random()*(same.length||pool.length))];
+  } else {
+    const i=S.list.findIndex(s=>s.stationuuid===(S.current&&S.current.stationuuid));
+    next=S.list[(i+1)%S.list.length]||pool[0];
+  }
+  playStation(next);
+  S.syncLeft=Math.max(10,+$('#syncSec').value||90);
+  setTimeout(warmNext, 2500);
+}
+function toggleSync(){
+  S.sync=!S.sync;
+  $('#sync').classList.toggle('on',S.sync);
+  $('#syncBtn').textContent=(S.sync?'■ ':'▶ ')+t('syncOn');
+  $('#syncBtn').classList.toggle('on',S.sync);
+  if (S.sync){ S.syncLeft=Math.max(10,+$('#syncSec').value||90); if(!S.current) nextStation(); }
+  else $('#cd').textContent='—';
+}
+$('#syncBtn').onclick = toggleSync;
+setInterval(()=>{
+  if (S.sleepAt && Date.now()>=S.sleepAt){ S.sleepAt=0; audio.pause(); amb.allOff(); toast(t('tGoodNight')); }
+  $('#scSleep').textContent = S.sleepAt ? Math.ceil((S.sleepAt-Date.now())/60000)+' min' : '';
+  if (!S.sync) return;
+  S.syncLeft--;
+  $('#cd').textContent = S.syncLeft>0 ? S.syncLeft+'s' : '···';
+  if (S.syncLeft<=0) nextStation();
+},1000);
+
+/* =============================== BUSCA =============================== */
+let qT;
+$('#q').oninput = e => { clearTimeout(qT); qT=setTimeout(()=>doSearch(e.target.value.trim()),380); };
+async function doSearch(q){
+  if (!q){ S.list=S.stations; drawMap(); renderStation(); return; }
+  $('#status').textContent=t('sweeping');
+  const enc=encodeURIComponent(q);
+  const base='/json/stations/search?hidebroken=true&order=clickcount&reverse=true';
+  const tryGet = p => api(p).catch(()=>[]);          // um endpoint mudo não derruba a busca
+  try{
+    const [r1,r2,r3,r4,r5] = await Promise.all([
+      tryGet(base+'&limit=500&name='+enc),
+      tryGet(base+'&limit=300&tag='+enc),
+      tryGet(base+'&limit=300&country='+enc),
+      tryGet(base+'&limit=300&state='+enc),          // província / estado
+      tryGet(base+'&limit=300&language='+enc)
+    ]);
+    const seen=new Set(), all=[];
+    const push = x => { if (!x || seen.has(x.stationuuid)) return;
+                        seen.add(x.stationuuid); S.byId[x.stationuuid]=x; all.push(x); };
+
+    /* as rádios de gente vêm primeiro */
+    const qq=q.toLowerCase();
+    S.stations.filter(x=>(x.mine||x.remote) &&
+      ((x.name||'')+' '+(x.country||'')).toLowerCase().includes(qq)).forEach(push);
+
+    /* o catálogo já carregado também é vasculhado: pega cidade, bairro, apelido */
+    S.stations.filter(x=>!x.mine && !x.remote &&
+      ((x.name||'')+' '+(x.country||'')+' '+(x.state||'')+' '+(x.tags||'')).toLowerCase().includes(qq)
+    ).slice(0,400).forEach(push);
+
+    [...r1,...r2,...r3,...r4,...r5].forEach(push);
+
+    if (!all.length){
+      $('#status').textContent='0 '+t('found');
+      toast(t('tNothingFound'));
+      S.list=S.stations; drawMap(); renderStation();   // devolve o mundo em vez de um mapa vazio
+      return;
+    }
+    S.list=all; renderStation(all);
+    const geo=all.filter(x=>x.geo_lat&&x.geo_long);
+    if (geo.length){
+      layer.clearLayers(); S.marks={}; geo.forEach(addDot);
+      if (S.current) markLive(S.current);
+      map.fitBounds(geo.map(x=>[x.geo_lat,x.geo_long]),{maxZoom:6,padding:[40,40]});
+    }
+    $('#status').textContent=all.length+' '+t('found');
+    openTab('p-est');
+  }catch(e){
+    toast(t('tSearchFail'));
+    S.list=S.stations; drawMap(); renderStation();
+  }
+}
+
+/* ============================== SIDEBAR ============================== */
+$$('.tabs button').forEach(b=>b.onclick=()=>openTab(b.dataset.p));
+function openTab(id){
+  $$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.p===id));
+  $$('.pane').forEach(p=>p.classList.toggle('on',p.id===id));
+  $('#side').classList.remove('collapsed');
+  if (id==='p-chat') renderRoom();
+  if (id==='p-global'){ S.unread=0; updateBadge(); renderGlobal(); }
+  if (id==='p-mural') renderMural();
+  if (id==='p-minha') renderMinha();
+  setTimeout(()=>map.invalidateSize(),240);
+}
+$('#tSide').onclick = ()=>{ $('#side').classList.toggle('collapsed'); setTimeout(()=>map.invalidateSize(),260); };
+function updateBadge(){
+  const b=$('#gBadge');
+  if (S.unread>0){ b.hidden=false; b.textContent=S.unread>99?'99+':S.unread; } else b.hidden=true;
+}
+
+function thumb(s, big){
+  const cls = 'thumb'+(big?' big':'');
+  if (s.favicon && /^(https:|data:image\/)/i.test(s.favicon))
+    return `<img class="${cls}" src="${esc(s.favicon)}" alt="" loading="lazy"
+             onerror="this.replaceWith(Object.assign(document.createElement('div'),
+               {className:'${cls} ph',textContent:'${esc((s.name||'?').trim()[0]||'?').toUpperCase()}'}))">`;
+  return `<div class="${cls} ph">${esc((s.name||'?').trim()[0]||'?').toUpperCase()}</div>`;
+}
+function stRow(s){
+  return `<div class="st${(s.mine||s.remote)?' mine':''}${S.current&&s.stationuuid===S.current.stationuuid?' on':''}"
+    data-id="${s.stationuuid}">${thumb(s)}<div class="txt"><b>${esc(s.name)}</b>
+    <i>${esc([s.mine?t('yoursShort'):(s.remote?t('byShort')+' '+(s.by||t('somebody')):s.country),s.codec,s.bitrate?s.bitrate+'k':''].filter(Boolean).join(' · '))}</i></div></div>`;
+}
+function renderStation(results){
+  const el=$('#p-est'), st=S.current;
+  let h='';
+  if (st){
+    const fav=S.favs.has(st.stationuuid);
+    const who = st.mine?t('yourRadio'):(st.remote?t('radioOf')+' '+esc((st.by||t('somebody')).toUpperCase()):st.country);
+    h += `<div class="sthead">${thumb(st,true)}<div style="min-width:0">
+        <h3 style="${st.mine?'color:var(--mint)':(st.remote?'color:var(--violet)':'')}">${esc(st.name)}</h3>
+        <div class="meta" style="margin-bottom:0">${[who,st.state,st.language].filter(Boolean).map(esc).join(' · ')}</div></div></div>
+      <div>${(st.tags||'').split(',').filter(Boolean).slice(0,10).map(x=>`<span class="tag">${esc(x)}</span>`).join('')}</div>
+      <div class="row" style="margin-top:14px;flex-wrap:wrap">
+        <button class="btn" id="bFav">${fav?'★ '+t('favorited'):'☆ '+t('favorite')}</button>
+        <button class="btn" id="bNext">${t('nextT')} →</button>
+        <button class="btn" id="bVizS">${t('expandT')}</button>
+        ${st.homepage?`<a class="btn" href="${esc(st.homepage)}" target="_blank" rel="noopener">${t('siteT')}</a>`:''}
+      </div>
+      <div class="meta" style="margin-top:14px">${esc(st.codec||'')} ${st.bitrate?st.bitrate+' kbps':''}
+        ${(st.mine||st.remote)?'':'· '+(st.clickcount||0).toLocaleString(LANG)+' '+t('listens')}</div>`;
+  } else {
+    h += `<div class="empty">${t('staticTxt')}<br><br>${t('clickDot')}<br>${t('orScanner')}<br>${t('andWorld')}</div>`;
+  }
+  const list = results || S.list;
+  if (list && list!==S.stations && list.length){
+    h += `<div class="lbl">${t('resultsT')} (${list.length})</div>`+list.slice(0,150).map(stRow).join('');
+  } else if (S.history.length>1){
+    h += `<div class="lbl">${t('beenThrough')}</div>`
+       + [...new Set(S.history)].slice(-25).reverse().map(id=>S.byId[id]?stRow(S.byId[id]):'').join('');
+  }
+  el.innerHTML=h;
+  el.querySelectorAll('.st').forEach(d=>d.onclick=()=>playStation(S.byId[d.dataset.id]));
+  const bf=$('#bFav');
+  if (bf) bf.onclick=()=>{
+    S.favs.has(st.stationuuid)?S.favs.delete(st.stationuuid):S.favs.add(st.stationuuid);
+    save('favs',[...S.favs]); renderStation(results);
+  };
+  const bn=$('#bNext'); if (bn) bn.onclick=nextStation;
+  const bv=$('#bVizS'); if (bv) bv.onclick=openViz;
+}
+
+/* ============================ REDE (RELAYS) ============================ */
+const TAG_ROOM = NOSTR.tag+'-sala';
+const D_MURAL  = id => 'aftersignal:mural:'+id;
+const D_RADIO  = 'aftersignal:radio';
+
+function netStart(){
+  NOSTR.start((up,total)=>{
+    const sig=$('#signal');
+    sig.classList.toggle('live', up>0);
+    $('#sigTx').textContent = up>0 ? up+'/'+total+' '+t('relaysN') : t('noSignal');
+    sig.querySelectorAll('.dots i').forEach((d,i)=>d.classList.toggle('up', i<up));
+  });
+
+  /* quem está no ar */
+  NOSTR.sub('presence',[{kinds:[NOSTR.K.presence],'#t':[NOSTR.tag],
+    since:Math.floor(Date.now()/1000)-180}], ev=>{
+    if (ev.pubkey === NOSTR.me()) return;
+    let c; try{ c=JSON.parse(ev.content); }catch(e){ return; }
+    S.people.set(ev.pubkey,{...c, t:Date.now(), pk:ev.pubkey});
+    noteSeen(ev.pubkey); drawPeople(); updateCounters();
+  });
+
+  /* canal global */
+  NOSTR.sub('global',[{kinds:[NOSTR.K.chat],'#t':[NOSTR.tag],limit:80}], ev=>{
+    if (S.chat.global.some(m=>m.id===ev.id)) return;
+    noteSeen(ev.pubkey);
+    S.chat.global.push(evToMsg(ev));
+    S.chat.global.sort((a,b)=>a.t-b.t);
+    if (S.chat.global.length>200) S.chat.global.shift();
+    if (!$('#p-global').classList.contains('on') && ev.pubkey!==NOSTR.me()){ S.unread++; updateBadge(); }
+    if ($('#p-global').classList.contains('on')) renderGlobal();
+    const last = S.chat.global[S.chat.global.length-1];
+    if (S.chat.global.some(m=>m.bcast)) { clearTimeout(drawBeacons._t); drawBeacons._t=setTimeout(drawBeacons,400); }
+    if (last && last.bcast && ev.pubkey!==NOSTR.me()) toast('⟟ '+last.who);
+  });
+
+  /* rádios pessoais de outras pessoas */
+  NOSTR.sub('radios',[{kinds:[NOSTR.K.app],'#d':[D_RADIO],limit:500}], ev=>{
+    if (ev.pubkey === NOSTR.me()) return;
+    noteSeen(ev.pubkey);
+    let c; try{ c=JSON.parse(ev.content); }catch(e){ return; }
+    const isSched = c.kind==='schedule' && Array.isArray(c.tracks) && c.tracks.length;
+    if (!c.name || (!c.url && !isSched) || !isFinite(c.lat) || !isFinite(c.lng)) return;
+    const id='remote-'+ev.pubkey.slice(0,16);
+    const st={stationuuid:id, name:String(c.name).slice(0,80),
+      kind:isSched?'schedule':'stream',
+      tracks:isSched?c.tracks.filter(x=>x&&typeof x.u==='string'&&isFinite(x.d)).slice(0,120):[],
+      t0:+c.t0||Date.now(),
+      url:c.url||'', url_resolved:c.url||'',
+      country:c.place||'', geo_lat:+c.lat, geo_long:+c.lng, tags:c.tags||'independente',
+      favicon: (typeof c.cover==='string' && /^data:image\/(jpeg|png|webp);base64,/.test(c.cover) && c.cover.length<40000) ? c.cover : '',
+      remote:true, by:String(c.by||'?').slice(0,40), clickcount:1};
+    const had = !!S.byId[id];
+    S.byId[id]=st;
+    if (had) S.stations = S.stations.map(x=>x.stationuuid===id?st:x); else S.stations.push(st);
+    clearTimeout(netStart._t); netStart._t=setTimeout(drawMap,700);
+  });
+
+  publishRadio();
+  setInterval(pushPresence, 45000);
+  setInterval(()=>{                       // limpa quem sumiu
+    const now=Date.now(); let ch=false;
+    for (const [k,v] of S.people) if (now-v.t>180000){ S.people.delete(k); ch=true; }
+    if (ch){ drawPeople(); updateCounters(); }
+  }, 30000);
+  updateCounters();
+}
+
+function evToMsg(ev){
+  const tags = ev.tags||[];
+  const get = k => { const t=tags.find(x=>x[0]===k); return t?t[1]:null; };
+  let name = get('n') ? String(get('n')).slice(0,32) : shortId(ev.pubkey);
+  const img = get('img');
+  const g = get('g');
+  let lat=null,lng=null;
+  if (g && /^-?[\d.]+,-?[\d.]+$/.test(g)){ const p=g.split(','); lat=+p[0]; lng=+p[1]; }
+  return {id:ev.id, who:name, pk:ev.pubkey, t:ev.created_at*1000,
+          text:String(ev.content||'').slice(0,600), mine:ev.pubkey===NOSTR.me(),
+          img:(img&&/^data:image\/(jpeg|png|webp);base64,/.test(img))?img:null,
+          lat, lng, place:get('place')||'', lang:get('lang')||'',
+          bcast: tags.some(t=>t[0]==='t'&&t[1]==='as-broadcast')};
+}
+
+/* --------------------------- presença no mapa --------------------------- */
+function pushPresence(){
+  if (!NOSTR.up()) return;
+  const c = {n:S.me, s:S.current?S.current.name:'', u:S.current?S.current.stationuuid:''};
+  if (S.share && isFinite(S.share.lat)){ c.la=S.share.lat; c.lo=S.share.lng; c.p=S.share.place||''; }
+  try{ NOSTR.publish({kind:NOSTR.K.presence, tags:[['t',NOSTR.tag]], content:JSON.stringify(c)}); }catch(e){}
+}
+function noteSeen(pk){
+  if (!pk || S.seen.has(pk)) return;
+  S.seen.add(pk);
+  if (S.seen.size>20000){ const a=[...S.seen].slice(-20000); S.seen=new Set(a); }
+  try{ localStorage.setItem('as:seen', JSON.stringify([...S.seen])); }catch(e){}
+  updateCounters();
+}
+function updateCounters(){
+  const a=$('#cntLive'), b=$('#cntSeen'), c=$('#cntLiveL'), d=$('#cntSeenL');
+  if (!a||!b) return;
+  a.textContent = S.people.size + (NOSTR.up()?1:0);   // os outros, mais você
+  b.textContent = S.seen.size;
+  if (c) c.textContent = t('onAirCount');
+  if (d) d.textContent = t('seenCount');
+}
+function drawPeople(){
+  players.clearLayers(); S.pmarks={};
+  for (const [pk,p] of S.people){
+    if (!isFinite(p.la) || !isFinite(p.lo)) continue;
+    const m=L.marker([p.la,p.lo],{zIndexOffset:600,icon:L.divIcon({className:'',iconSize:[10,10],
+      iconAnchor:[5,5],html:'<div class="ppl" style="width:10px;height:10px"></div>'})});
+    m.bindTooltip(`${esc(p.n||'alguém')}${p.p?' · '+esc(p.p):''}`+
+      (p.s?`<br><span style="opacity:.6">ouvindo ${esc(p.s)}</span>`:''),{direction:'top',offset:[0,-5]});
+    m.on('click',()=>{ if (p.u && S.byId[p.u]) playStation(S.byId[p.u]); else toast(p.n+' está ouvindo '+(p.s||'algo')); });
+    m.addTo(players); S.pmarks[pk]=m;
+  }
+  updateCounters();
+  const n=[...S.people.values()].filter(p=>isFinite(p.la)).length;
+  const tot=S.people.size;
+  $('#sigTx').textContent = NOSTR.up()
+    ? (tot? tot+' '+t('onAirN')+(n?' · '+n+' '+t('onMapN'):'') : NOSTR.up()+' '+t('relaysN'))
+    : t('noSignal');
+}
+
+/* ---------------------- foto (comprimida no navegador) ---------------------- */
+const PHOTO_MAX = 30000;   // ~30 KB: o que um relay engole sem reclamar
+function compressImage(file, maxPx=420){
+  return new Promise((res,rej)=>{
+    if (!file || !/^image\//.test(file.type)) return rej(t('tBadImage'));
+    const img=new Image(), url=URL.createObjectURL(file);
+    img.onload=()=>{
+      URL.revokeObjectURL(url);
+      const sc=Math.min(1, maxPx/Math.max(img.width,img.height));
+      const c=document.createElement('canvas');
+      c.width=Math.round(img.width*sc); c.height=Math.round(img.height*sc);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      let q=0.72, out=c.toDataURL('image/jpeg',q);
+      while (out.length>PHOTO_MAX && q>0.24){ q-=0.09; out=c.toDataURL('image/jpeg',q); }
+      if (out.length>PHOTO_MAX){
+        const c2=document.createElement('canvas');
+        c2.width=Math.round(c.width*0.66); c2.height=Math.round(c.height*0.66);
+        c2.getContext('2d').drawImage(c,0,0,c2.width,c2.height);
+        out=c2.toDataURL('image/jpeg',0.5);
+      }
+      out.length>PHOTO_MAX ? rej(t('tBigImage')) : res(out);
+    };
+    img.onerror=()=>rej(t('tBadImage'));
+    img.src=url;
+  });
+}
+let pendingPhoto = null;
+
+/* -------------------------------- chats -------------------------------- */
+function sendChat(text, roomId, opts){
+  opts = opts || {};
+  if (!text && !opts.photo) return;
+  if (!NOSTR.up()){ toast(t('tNoRelay')); return; }
+  const tags = roomId ? [['t',TAG_ROOM],['r',roomId],['n',S.me],['lang',LANG]]
+                      : [['t',NOSTR.tag],['n',S.me],['lang',LANG]];
+  if (opts.photo) tags.push(['img', opts.photo]);
+  if (opts.broadcast){
+    tags.push(['t','as-broadcast']);
+    if (S.share && isFinite(S.share.lat)){
+      tags.push(['g', S.share.lat+','+S.share.lng]);
+      if (S.share.place) tags.push(['place', S.share.place]);
+    }
+  }
+  let ev;
+  try{ ev = NOSTR.publish({kind:NOSTR.K.chat, tags, content:(text||'').slice(0,600)}); }
+  catch(e){ return toast(t('tBadImage')); }
+  const m = evToMsg(ev);
+  if (roomId){ S.chat.room.push(m); renderRoom(); }
+  else { S.chat.global.push(m); renderGlobal(); if (m.bcast) drawBeacons(); }
+}
+function subRoom(){
+  S.chat.room = [];
+  if (!S.current) return;
+  NOSTR.sub('room',[{kinds:[NOSTR.K.chat],'#r':[S.current.stationuuid],limit:60}], ev=>{
+    if (S.chat.room.some(m=>m.id===ev.id)) return;
+    S.chat.room.push(evToMsg(ev));
+    S.chat.room.sort((a,b)=>a.t-b.t);
+    if ($('#p-chat').classList.contains('on')) renderRoom();
+  });
+  if ($('#p-chat').classList.contains('on')) renderRoom();
+}
+
+function msgHtml(m){
+  const when=new Date(m.t).toLocaleString(LANG,{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  const geo = m.lat!==null && isFinite(m.lat)
+    ? `<div class="geo">◉ ${m.place?esc(m.place)+' · ':''}${m.lat.toFixed(1)}, ${m.lng.toFixed(1)}
+        <span class="act" data-goto="${m.lat},${m.lng}" style="color:var(--mag)">${t('seeOnMap')}</span></div>` : '';
+  return `<div class="msg${m.mine?' mine':''}${m.bcast?' bcast':''}" data-id="${m.id}">
+    <div class="who"><b>${m.bcast?'⟟ ':''}${esc(m.who)}</b><span>${when}</span></div>
+    <div class="tx">${esc(m.text)}</div>
+    ${m.img?`<img class="photo" src="${m.img}" alt="">`:''}
+    ${geo}
+    ${m.tr?`<div class="tr">${esc(m.tr)}</div>`:`<div class="act">${t('translateT')}</div>`}</div>`;
+}
+function wireMsgs(root, arr){
+  root.querySelectorAll('[data-goto]').forEach(a=>a.onclick=e=>{
+    e.stopPropagation();
+    const [la,lo]=a.dataset.goto.split(',').map(Number);
+    map.flyTo([la,lo],6,{duration:1.2});
+  });
+  root.querySelectorAll('.act:not([data-goto])').forEach(a=>a.onclick=async ()=>{
+    const box=a.closest('.msg'); a.textContent=t('translating');
+    const txt=box.querySelector('.tx').textContent;
+    const from=((S.current&&(S.current.languagecodes||'')).split(',')[0]||'en').slice(0,2);
+    const tr=await translate(txt,from,(navigator.language||'pt-BR').slice(0,2));
+    const m=arr.find(x=>x.id===box.dataset.id); if(m) m.tr=tr;
+    a.outerHTML=`<div class="tr">${esc(tr)}</div>`;
+  });
+}
+const trCache = new Map();
+async function autoTranslate(root, arr){
+  if (!S.autoTr) return;
+  const boxes=[...root.querySelectorAll('.msg')].slice(-14);
+  for (const box of boxes){
+    const m = arr.find(x=>x.id===box.dataset.id);
+    if (!m || m.tr || m.mine) continue;
+    const from = (m.lang||'').slice(0,2);
+    if (!from || from===LANG) continue;
+    const key = from+'|'+LANG+'|'+m.text;
+    let tr = trCache.get(key);
+    if (tr === undefined){
+      tr = await translate(m.text, from, LANG);
+      trCache.set(key, tr);
+    }
+    if (/^\(/.test(tr)) continue;                  // não polui com mensagens de erro
+    m.tr = tr;
+    const act = box.querySelector('.act:not([data-goto])');
+    if (act) act.outerHTML = `<div class="tr">${esc(tr)}</div>`;
+  }
+}
+async function translate(text,from,to){
+  if (from===to) return t('alreadyLang');
+  try{
+    const r=await fetch('https://api.mymemory.translated.net/get?q='+encodeURIComponent(text)
+            +'&langpair='+encodeURIComponent(from+'|'+to));
+    const j=await r.json();
+    const t2=j&&j.responseData&&j.responseData.translatedText;
+    return (t2&&!/^MYMEMORY WARNING/i.test(t2))?t2:t('trFail');
+  }catch(e){ return t('trOffline'); }
+}
+
+function chatPane(el, arr, head, roomId, placeholder){
+  el.innerHTML = head + `
+    <div class="msgs">${arr.length?arr.map(msgHtml).join('')
+      :`<div class="empty">${t('nobodyYet')}<br>${t('saySomething')}<br>${t('someoneReads')}</div>`}</div>
+    <div class="composer">
+      <textarea class="field" id="cIn" rows="2" placeholder="${placeholder}"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="btn primary" id="cSend">${t('sendT')}</button>
+        <span class="meta" style="margin:0">${t('enterSends')}</span></div></div>`;
+  wireMsgs(el, arr);
+  const send=()=>{
+    const v=$('#cIn').value.trim();
+    if(!v) return;
+    $('#cIn').value='';
+    sendChat(v, roomId);
+  };
+  $('#cSend').onclick=send;
+  $('#cIn').onkeydown=e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); } };
+  autoTranslate(el, arr);
+  el.scrollTop=el.scrollHeight;
+}
+
+/* botão de foto reutilizável */
+function wirePhoto(btn, input, box){
+  if (!btn) return;
+  btn.onclick=()=>input.click();
+  input.onchange=async e=>{
+    const f=e.target.files[0]; if(!f) return;
+    btn.textContent=t('compressing');
+    try{
+      pendingPhoto = await compressImage(f);
+      box.hidden=false;
+      box.innerHTML = `<img src="${pendingPhoto}" alt="">
+        <span>${Math.round(pendingPhoto.length/1024)} KB ${t('attached')}</span>
+        <span class="act" id="cDrop" style="text-decoration:underline;cursor:pointer">${t('removeT')}</span>`;
+      box.querySelector('#cDrop').onclick=()=>{ pendingPhoto=null; box.hidden=true; box.innerHTML=''; };
+    }catch(err){ toast(typeof err==='string'?err:t('tBadImage')); }
+    btn.textContent='📷 '+t('photoT');
+    input.value='';
+  };
+}
+function renderGlobal(){
+  const head = `<h3>${t('globalChan')}</h3>
+    <div class="meta">${NOSTR.up()?t('openNow')+' · '+S.people.size+' '+t('nowOnAir'):t('offlineNow')}</div>
+    <div class="bcastbox">
+      <div class="lbl">⟟ ${t('lastSignal')}</div>
+      <div style="font-size:11.5px;color:var(--tx2);line-height:1.6;margin-bottom:9px">
+        ${t('bcastDesc')}
+        ${S.share?'':'<span style="color:var(--tx3)">'+t('bcastNoGeo')+'</span>'}</div>
+      <textarea class="field" id="bIn" rows="2" placeholder="${t('bcastPh')}"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="btn mag" id="bSend">${t('bcastBtn')}</button>
+        <span style="flex:1"></span>
+        <button class="btn ${S.autoTr?'mint':''}" id="bAuto">⇄ ${t('autoTr')}</button>
+      </div>
+    </div>`;
+  chatPane($('#p-global'), S.chat.global, head, null, t('chatPh'));
+
+  $('#bAuto').onclick=()=>{ S.autoTr=!S.autoTr; save('autoTr',S.autoTr); renderGlobal(); };
+  $('#bSend').onclick=()=>{
+    const v=$('#bIn').value.trim();
+    if (!v) return toast(t('tWriteFirst'));
+    $('#bIn').value='';
+    sendChat(v, null, {broadcast:true});
+    toast(t('tBroadcast'));
+  };
+}
+function renderRoom(){
+  const st=S.current;
+  if (!st){ $('#p-chat').innerHTML=`<div class="empty">${t('tuneFirst')}<br>${t('toSeeRoom')}</div>`; return; }
+  chatPane($('#p-chat'), S.chat.room,
+    `<h3>${esc(st.name)}</h3><div class="meta">${t('roomSub')}</div>`,
+    st.stationuuid, t('roomPh'));
+}
+
+/* --------------------- os sinais no mapa (transmissões) --------------------- */
+const beacons = L.layerGroup().addTo(map);
+function drawBeacons(){
+  beacons.clearLayers();
+  const cutoff = Date.now() - 6*3600*1000;      // seis horas de eco
+  for (const m of S.chat.global){
+    if (!m.bcast || m.lat===null || !isFinite(m.lat) || m.t < cutoff) continue;
+    const age = (Date.now()-m.t)/(6*3600*1000);
+    const mk = L.marker([m.lat,m.lng],{zIndexOffset:800,icon:L.divIcon({className:'',iconSize:[16,16],
+      iconAnchor:[8,8],html:`<div class="beacon" style="width:16px;height:16px;opacity:${(1-age*0.7).toFixed(2)}"></div>`})});
+    mk.bindPopup(`<b style="color:#ff3d8b">⟟ ${esc(m.who)}</b><br>${esc(m.text)}`+
+      (m.img?`<br><img src="${m.img}" style="width:190px;margin-top:6px;border-radius:2px">`:'')+
+      `<br><span style="opacity:.55;font-size:10px">${new Date(m.t).toLocaleString(LANG)}</span>`);
+    mk.addTo(beacons);
+  }
+}
+
+/* -------------------------------- mural -------------------------------- */
+function renderMural(){
+  const el=$('#p-mural'), st=S.current;
+  if (!st){ el.innerHTML=`<div class="empty">${t('tuneFirst')}<br>${t('toSeeWall')}</div>`; return; }
+  S.mural=[];
+  NOSTR.sub('mural',[{kinds:[NOSTR.K.app],'#d':[D_MURAL(st.stationuuid)],limit:120}], ev=>{
+    if (S.mural.some(m=>m.id===ev.id||m.pk===ev.pubkey)) {
+      S.mural = S.mural.filter(m=>m.pk!==ev.pubkey);
+    }
+    S.mural.push(evToMsg(ev));
+    S.mural.sort((a,b)=>b.t-a.t);
+    paintMural();
+  });
+  paintMural();
+}
+function paintMural(){
+  const el=$('#p-mural'), st=S.current; if(!st) return;
+  const mineNote=S.mural.find(m=>m.mine);
+  el.innerHTML=`<h3>${t('wallT')}</h3>
+    <div class="meta">${esc(st.name)} — ${t('wallSub')}</div>
+    <div class="msgs">${S.mural.length?S.mural.map(msgHtml).join('')
+      :`<div class="empty">${t('noNotes')}</div>`}</div>
+    <div class="composer">
+      <textarea class="field" id="mIn" rows="3"
+        placeholder="${t('notePh')}">${mineNote?esc(mineNote.text):''}</textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="btn primary" id="mSend">${mineNote?t('rewriteT'):t('pinT')}</button>
+        <button class="btn" id="mPic">📷 ${t('photoT')}</button>
+        <input type="file" id="mFile" accept="image/*" hidden></div>
+      <div class="att" id="mAtt" hidden></div></div>
+    <div class="note">${t('wallNote')}</div>`;
+  wireMsgs(el,S.mural);
+  autoTranslate(el,S.mural);
+  pendingPhoto=null;
+  wirePhoto($('#mPic'), $('#mFile'), $('#mAtt'));
+  $('#mSend').onclick=()=>{
+    const v=$('#mIn').value.trim(); if(!v && !pendingPhoto) return;
+    if (!NOSTR.up()) return toast(t('tNoRelay'));
+    const tags=[['d',D_MURAL(st.stationuuid)],['t',NOSTR.tag],['n',S.me],['lang',LANG]];
+    if (pendingPhoto) tags.push(['img',pendingPhoto]);
+    const ev=NOSTR.publish({kind:NOSTR.K.app, tags, content:v.slice(0,600)});
+    pendingPhoto=null;
+    S.mural=S.mural.filter(m=>!m.mine); S.mural.unshift(evToMsg(ev)); paintMural();
+    toast(t('tNoteOnAir'));
+  };
+}
+
+/* ---------------------------- a sua rádio ---------------------------- */
+function publishRadio(){
+  const mine = S.stations.find(s=>s.mine);
+  if (!mine || !NOSTR.up()) return;
+  try{
+    const body = {name:mine.name, lat:mine.geo_lat, lng:mine.geo_long,
+      place:mine.country, tags:mine.tags, by:S.me, kind:mine.kind||'stream'};
+    if (mine.favicon && mine.favicon.length < 32000) body.cover = mine.favicon;
+    if (mine.kind==='schedule'){ body.tracks=(mine.tracks||[]).slice(0,120); body.t0=mine.t0; }
+    else body.url = mine.url_resolved||mine.url;
+    NOSTR.publish({kind:NOSTR.K.app, tags:[['d',D_RADIO],['t',NOSTR.tag],['n',S.me]],
+      content: JSON.stringify(body)});
+  }catch(e){}
+}
+/* ------------- programação sincronizada (rádio sem servidor) ------------- */
+function scheduleNow(st){
+  const tr = st.tracks||[];
+  const total = tr.reduce((x,y)=>x+(y.d||0),0);
+  if (!tr.length || total<=0) return null;
+  let el = ((Date.now() - (st.t0||0))/1000) % total;
+  if (el < 0) el += total;
+  for (let i=0;i<tr.length;i++){
+    if (el < tr[i].d) return {i, offset:el, track:tr[i], total};
+    el -= tr[i].d;
+  }
+  return {i:0, offset:0, track:tr[0], total};
+}
+function playSchedule(st){
+  const pos = scheduleNow(st);
+  if (!pos){ toast(t('tNoTracks')); return; }
+  S.schedule = {st, i:pos.i};
+  audio.src = pos.track.u;
+  audio.currentTime = 0;
+  const seek = ()=>{ try{ audio.currentTime = pos.offset; }catch(e){} audio.removeEventListener('loadedmetadata',seek); };
+  audio.addEventListener('loadedmetadata', seek);
+  audio.play().catch(fail);
+}
+audio.addEventListener('ended', ()=>{
+  if (!S.schedule) return;
+  const st = S.schedule.st;
+  const nxt = (S.schedule.i+1) % (st.tracks||[]).length;
+  S.schedule.i = nxt;
+  audio.src = st.tracks[nxt].u;
+  audio.play().catch(fail);
+});
+function measureTrack(url){
+  return new Promise((res,rej)=>{
+    const a=new Audio();
+    a.preload='metadata'; a.src=url;
+    const to=setTimeout(()=>{ a.src=''; rej(); }, 15000);
+    a.onloadedmetadata=()=>{ clearTimeout(to); res(isFinite(a.duration)?a.duration:0); a.src=''; };
+    a.onerror=()=>{ clearTimeout(to); rej(); };
+  });
+}
+
+/* ---------------------------- painel MINHA ---------------------------- */
+function renderMinha(){
+  const mine=S.stations.filter(x=>x.mine);
+  const sh=S.share;
+  const draft = S.draft || {};
+  const way = S.way || (mine.length ? (mine[0].kind==='schedule'?'list':'link') : 'link');
+  const tracks = draft.tracks || (mine[0]&&mine[0].tracks) || [];
+
+  $('#p-minha').innerHTML=`<h3 style="color:var(--mint)">${t('yourBroadcast')}</h3>
+    <div class="meta">${t('colorsNote')}</div>
+    ${mine.length?`<button class="btn mint" id="mnScene" style="width:100%;margin-bottom:10px">${t('seeTower')}</button>`:''}
+
+    <div class="lbl">${t('whereSound')}</div>
+    <div class="amb">
+      <button class="btn${way==='link'?' mint':''}" data-way="link">${t('wayLink')}</button>
+      <button class="btn${way==='list'?' mint':''}" data-way="list">${t('wayList')}</button>
+      <button class="btn${way==='local'?' mint':''}" data-way="local">${t('wayLocal')}</button>
+    </div>
+    <div class="note" style="margin-top:9px">${way==='link'?t('wayLinkH'):(way==='list'?t('wayListH'):t('wayLocalH'))}</div>
+
+    <div class="lbl">${t('nameT')}</div>
+    <input class="field" id="mnName" value="${esc(draft.name||'')}" placeholder="Rádio Fundo de Quintal">
+
+    ${way==='link'?`
+      <div class="lbl">stream (mp3/aac/m3u8)</div>
+      <input class="field" id="mnUrl" value="${esc(draft.url||'')}" placeholder="https://…">`:''}
+
+    ${way!=='local'?`
+      <div class="lbl">${t('coverT')}</div>
+      <div class="note" style="margin-top:0">${t('coverHint')}</div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" id="mnCover">📷 ${t('photoT')}</button>
+        <input type="file" id="mnCoverF" accept="image/*" hidden>
+        ${draft.cover?`<img src="${draft.cover}" style="width:44px;height:44px;object-fit:cover;
+          border-radius:2px;border:1px solid var(--line2)">
+          <span class="act" id="mnCoverX" style="cursor:pointer">${t('removeT')}</span>`:''}
+      </div>`:''}
+
+    ${way==='list'?`
+      <div class="lbl">${t('addTrack')}</div>
+      <div class="row"><input class="field" id="mnTrack" placeholder="${t('trackUrlPh')}">
+        <button class="btn" id="mnAddTrack">+</button></div>
+      <div class="note" style="margin-top:8px">${t('whereHost')}</div>
+      ${tracks.length?`<div class="lbl">${tracks.length} ${t('tracksN')} · ${t('syncedNote')}</div>`+
+        tracks.map((x,i)=>`<div class="st"><div class="txt"><b>${esc(x.u.split('/').pop().slice(0,42))}</b>
+          <i>${Math.floor(x.d/60)}:${String(Math.round(x.d%60)).padStart(2,'0')}</i></div>
+          <span class="act" data-rmtrack="${i}" style="cursor:pointer">✕</span></div>`).join(''):''}`:''}
+
+    ${way==='local'?`
+      <div class="lbl">${t('wayLocal')}</div>
+      <input type="file" class="field" id="mnFile" accept="audio/*" multiple>`:''}
+
+    ${way!=='local'?`
+      <div class="lbl">${t('whereIsIt')}</div>
+      <div class="row"><input class="field" id="mnLat" placeholder="lat" value="${draft.lat!==undefined?draft.lat:'-26.23'}">
+        <input class="field" id="mnLng" placeholder="lng" value="${draft.lng!==undefined?draft.lng:'-52.67'}"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" id="mnHere">${t('myPosition')}</button>
+        <button class="btn mint" id="mnAdd">${draft.editing?t('saveT'):t('putOnAir')}</button>
+        ${draft.editing?`<button class="btn" id="mnCancel">✕</button>`:''}</div>`:''}
+
+    ${mine.length?`<div class="lbl">${t('yourStations')}</div>`+mine.map(x=>
+      `<div class="st mine"><div class="txt" data-id="${x.stationuuid}"><b>${esc(x.name)}</b>
+       <i>${x.kind==='schedule'?(x.tracks||[]).length+' '+t('tracksN'):t('yoursShort')} · ${(+x.geo_lat).toFixed(1)}, ${(+x.geo_long).toFixed(1)}</i></div>
+       <span class="act" data-edit="${x.stationuuid}" style="cursor:pointer">${t('editT')}</span>
+       <span class="act" data-del="${x.stationuuid}" style="cursor:pointer">${t('deleteT')}</span></div>`).join(''):''}
+
+    <div class="lbl">${t('appearOnMap')}</div>
+    <div class="note" style="margin-top:0">${t('appearNote')}</div>
+    <div class="row" style="margin-top:9px">
+      <button class="btn ${sh?'mint':''}" id="shOn">${sh?t('appearing'):t('wantAppear')}</button>
+      ${sh?`<button class="btn" id="shOff">${t('disappearT')}</button>`:''}
+    </div>
+    <div class="note">${t('identityNote')}<br><b style="color:var(--tx2)">${shortId(NOSTR.me())}</b>
+      <span class="act" id="cpKey" style="cursor:pointer;margin-left:6px">⧉</span></div>`;
+
+  /* caminhos */
+  $('#p-minha').querySelectorAll('[data-way]').forEach(b=>b.onclick=()=>{
+    S.way=b.dataset.way; S.draft=S.draft||{}; renderMinha();
+  });
+  /* abrir cena / tocar / editar / apagar */
+  const ms=$('#mnScene'); if (ms) ms.onclick=openScene;
+  $('#p-minha').querySelectorAll('[data-id]').forEach(d=>d.onclick=()=>playStation(S.byId[d.dataset.id]));
+  $('#p-minha').querySelectorAll('[data-edit]').forEach(a=>a.onclick=()=>{
+    const x=S.byId[a.dataset.edit];
+    S.way = x.kind==='schedule'?'list':'link';
+    S.draft={editing:x.stationuuid, name:x.name, url:x.url, lat:x.geo_lat, lng:x.geo_long,
+             tracks:(x.tracks||[]).slice(), cover:x.favicon||null};
+    renderMinha();
+  });
+  $('#p-minha').querySelectorAll('[data-del]').forEach(a=>a.onclick=()=>{
+    const id=a.dataset.del;
+    save('mine', load('mine',[]).filter(x=>x.stationuuid!==id));
+    S.stations=S.stations.filter(x=>x.stationuuid!==id); delete S.byId[id];
+    S.draft=null; drawMap(); renderMinha();
+  });
+  const mc=$('#mnCancel'); if (mc) mc.onclick=()=>{ S.draft=null; renderMinha(); };
+  const ck=$('#cpKey'); if (ck) ck.onclick=()=>{
+    navigator.clipboard && navigator.clipboard.writeText(NOSTR.me()).then(()=>toast(t('tSaved'))).catch(()=>{});
+  };
+
+  /* faixas da programação */
+  const at=$('#mnAddTrack');
+  if (at) at.onclick=async ()=>{
+    const u=$('#mnTrack').value.trim();
+    if(!u) return;
+    at.textContent='…'; toast(t('tReading'));
+    try{
+      const d=await measureTrack(u);
+      if (!d) throw 0;
+      S.draft=S.draft||{}; S.draft.name=$('#mnName').value;
+      S.draft.tracks=(S.draft.tracks||tracks).concat([{u,d}]);
+      renderMinha();
+    }catch(e){ toast(t('tBadTrack')); at.textContent='+'; }
+  };
+  $('#p-minha').querySelectorAll('[data-rmtrack]').forEach(a=>a.onclick=()=>{
+    S.draft=S.draft||{}; S.draft.name=$('#mnName').value;
+    S.draft.tracks=(S.draft.tracks||tracks).filter((_,i)=>i!==+a.dataset.rmtrack);
+    renderMinha();
+  });
+
+  /* capa */
+  const mcv=$('#mnCover');
+  if (mcv){
+    mcv.onclick=()=>$('#mnCoverF').click();
+    $('#mnCoverF').onchange=async e=>{
+      const f=e.target.files[0]; if(!f) return;
+      mcv.textContent=t('compressing');
+      try{
+        S.draft=S.draft||{};
+        S.draft.name=$('#mnName').value;
+        if ($('#mnUrl')) S.draft.url=$('#mnUrl').value;
+        S.draft.tracks=(S.draft.tracks||tracks);
+        S.draft.cover=await compressImage(f, 260);
+        renderMinha();
+      }catch(err){ toast(typeof err==='string'?err:t('tBadImage')); mcv.textContent='📷 '+t('photoT'); }
+    };
+    const cx2=$('#mnCoverX');
+    if (cx2) cx2.onclick=()=>{ S.draft=S.draft||{}; S.draft.cover=null; renderMinha(); };
+  }
+
+  /* posição */
+  const mh=$('#mnHere');
+  if (mh) mh.onclick=()=> navigator.geolocation
+    ? navigator.geolocation.getCurrentPosition(p=>{
+        $('#mnLat').value=p.coords.latitude.toFixed(4); $('#mnLng').value=p.coords.longitude.toFixed(4);
+      },()=>toast(t('tNoPerm')))
+    : toast(t('tNoPerm'));
+
+  /* arquivos locais */
+  const mf=$('#mnFile');
+  if (mf) mf.onchange=e=>{
+    const files=[...e.target.files]; if(!files.length) return;
+    const st={stationuuid:'local-'+Date.now(), name:files.length>1?files.length+' '+t('tracksN'):files[0].name.replace(/\.[^.]+$/,''),
+      kind:'local', local:files.map(f=>URL.createObjectURL(f)), li:0,
+      url:'', url_resolved:'', country:t('wayLocal'), geo_lat:0, geo_long:0, mine:true, tags:'local'};
+    st.url = st.url_resolved = st.local[0];
+    S.byId[st.stationuuid]=st; S.stations.push(st); playStation(st);
+  };
+
+  /* salvar / publicar */
+  const ma=$('#mnAdd');
+  if (ma) ma.onclick=()=>{
+    const name=$('#mnName').value.trim();
+    const lat=+$('#mnLat').value, lng=+$('#mnLng').value;
+    const isList = S.way==='list';
+    const url = isList?'':( $('#mnUrl')?$('#mnUrl').value.trim():'' );
+    const trk = isList ? ((S.draft&&S.draft.tracks)||tracks) : [];
+    if (!name) return toast(t('tNeedName'));
+    if (!isList && !url) return toast(t('tNeedName'));
+    if (isList && !trk.length) return toast(t('tNoTracks'));
+
+    const editing = S.draft && S.draft.editing;
+    const id = editing || (isList?'sched-':'mine-')+Date.now();
+    const old = editing ? S.byId[editing] : null;
+    const st = {stationuuid:id, name, kind:isList?'schedule':'stream',
+      url: isList?'':url, url_resolved: isList?'':url,
+      tracks: trk, t0: (old&&old.t0)||Date.now(),
+      favicon: (S.draft&&S.draft.cover!==undefined) ? S.draft.cover : (old&&old.favicon)||'',
+      country: isList?t('syncedNote'):t('yourRadio'), geo_lat:lat, geo_long:lng,
+      tags:'independente', mine:true, clickcount:1};
+
+    const arr = load('mine',[]).filter(x=>x.stationuuid!==id);
+    arr.push(st); save('mine',arr);
+    S.stations = S.stations.filter(x=>x.stationuuid!==id).concat([st]);
+    S.byId[id]=st;
+    S.draft=null;
+    drawMap(); renderMinha(); publishRadio();
+    toast(editing?t('tSaved'):t('tOnAirNow'));
+    playStation(st);
+    if (!editing) openScene();
+  };
+
+  const so=$('#shOn');
+  if (so) so.onclick=()=>{
+    if (!navigator.geolocation) return toast(t('tNoPerm'));
+    navigator.geolocation.getCurrentPosition(p=>{
+      const r=v=>Math.round(v*2)/2;
+      S.share={lat:r(p.coords.latitude), lng:r(p.coords.longitude), place:''};
+      save('share',S.share); pushPresence(); renderMinha(); toast(t('tYouAppear'));
+    },()=>toast(t('tNoPerm')));
+  };
+  const sf=$('#shOff'); if (sf) sf.onclick=()=>{
+    S.share=null; localStorage.removeItem(LS('share')); renderMinha(); toast(t('tYouGone'));
+  };
+}
+
+/* ------------------------------- filtros ------------------------------- */
+$('#fHttps').onclick = e=>{ S.onlyHttps=!S.onlyHttps; e.target.classList.toggle('on',S.onlyHttps); drawMap(); };
+$('#fFav').onclick   = e=>{ S.onlyFav=!S.onlyFav;   e.target.classList.toggle('on',S.onlyFav);   drawMap(); };
+$('#fMine').onclick  = e=>{ S.onlyMine=!S.onlyMine; e.target.classList.toggle('on',S.onlyMine);  drawMap(); };
+$('#signal').onclick = ()=> openTab('p-global');
+$('#bSpeak').onclick = ()=>{
+  openTab('p-global');
+  setTimeout(()=>{ const b=$('#bIn'); if(b){ b.focus(); b.scrollIntoView({block:'center'}); } },120);
+};
+$('#bSpeak').title = 'falar ao mundo';
+
+/* ==== CENA (paisagem da torre) ==== */
+/* =======================================================================
+   CENA — a sua torre, depois do sinal
+   ======================================================================= */
+const cv = $('#sky'), cx = cv.getContext('2d');
+let sceneOn = false, sceneT = 0, hourMode = 'auto', W = 0, H = 0, DPR = 1;
+const stars = [], clouds = [], flies = [], birds = [], drops = [], forest = [];
+
+function resizeScene(){
+  DPR = Math.min(2, window.devicePixelRatio||1);
+  W = cv.clientWidth; H = cv.clientHeight;
+  cv.width = W*DPR; cv.height = H*DPR;
+  cx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', ()=>{ if (sceneOn) resizeScene(); map.invalidateSize(); });
+
+function seedScene(){
+  stars.length = clouds.length = flies.length = birds.length = drops.length = forest.length = 0;
+  for (let i=0;i<190;i++) stars.push({x:Math.random(), y:Math.random()*0.62, r:Math.random()*1.3+0.3,
+                                      p:Math.random()*Math.PI*2, s:0.6+Math.random()*1.8});
+  for (let i=0;i<8;i++)  clouds.push({x:Math.random(), y:0.07+Math.random()*0.24, w:0.11+Math.random()*0.22,
+                                      v:0.000016+Math.random()*0.000040, o:0.10+Math.random()*0.20,
+                                      p0:Math.random()*6});
+  const spots=[0.045,0.085,0.115,0.155,0.18,0.42,0.455,0.49,0.52,0.545,0.70,0.735,0.775,0.81,0.845,0.88,0.915,0.955,0.985];
+  for (const u of spots) forest.push({u, s:0.040+((u*97)%1)*0.030, k:((u*57)%1)>0.68?1:0});
+  for (let i=0;i<48;i++) flies.push({x:Math.random(), y:0.62+Math.random()*0.33, p:Math.random()*Math.PI*2,
+                                      s:0.4+Math.random()*1.1, r:0.7+Math.random()*1.1});
+  for (let i=0;i<9;i++)  birds.push({x:Math.random(), y:0.16+Math.random()*0.24, v:0.00006+Math.random()*0.00011,
+                                      p:Math.random()*Math.PI*2});
+  for (let i=0;i<320;i++) drops.push({x:Math.random(), y:Math.random(), l:0.012+Math.random()*0.028,
+                                      v:0.006+Math.random()*0.010});
+}
+seedScene();
+
+/* ---- paleta por hora (arrays rgb, para poder misturar com névoa) ---- */
+const K = [
+  {h:0,   top:[5,7,15],    mid:[10,16,32],   low:[20,27,44],   gnd:[10,16,20], amb:0.10},
+  {h:5,   top:[16,26,51],  mid:[43,43,80],   low:[107,74,90],  gnd:[18,24,32], amb:0.22},
+  {h:6.5, top:[44,74,122], mid:[138,111,134],low:[224,149,106],gnd:[42,52,44], amb:0.55},
+  {h:9,   top:[63,127,196],mid:[127,179,224],low:[207,227,242],gnd:[62,92,62], amb:0.95},
+  {h:15,  top:[59,120,189],mid:[121,174,222],low:[201,224,240],gnd:[64,96,64], amb:0.95},
+  {h:18,  top:[39,67,111], mid:[162,98,138], low:[240,161,99], gnd:[48,58,50], amb:0.60},
+  {h:20,  top:[14,23,48],  mid:[42,38,72],   low:[93,63,87],   gnd:[26,30,36], amb:0.24},
+  {h:22,  top:[6,9,15],    mid:[11,18,35],   low:[21,28,46],   gnd:[12,17,22], amb:0.11},
+  {h:24,  top:[5,7,15],    mid:[10,16,32],   low:[20,27,44],   gnd:[10,16,20], amb:0.10}
+];
+const mixc = (a,b,t) => a.map((v,i)=> v+(b[i]-v)*t);
+const rgba = (c,a) => `rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a})`;
+
+function palette(h){
+  let a=K[0], b=K[K.length-1];
+  for (let i=0;i<K.length-1;i++) if (h>=K[i].h && h<=K[i+1].h){ a=K[i]; b=K[i+1]; break; }
+  const t=(h-a.h)/((b.h-a.h)||1);
+  return {top:mixc(a.top,b.top,t), mid:mixc(a.mid,b.mid,t), low:mixc(a.low,b.low,t),
+          gnd:mixc(a.gnd,b.gnd,t), amb:a.amb+(b.amb-a.amb)*t};
+}
+
+/* ---- silhueta de relevo com névoa aérea ---- */
+function ridge(baseY, amp, freq, phase, color, fog, fogAmt, jag){
+  const c = mixc(color, fog, fogAmt);
+  const g = cx.createLinearGradient(0, baseY-amp*2.4, 0, H);
+  g.addColorStop(0, rgba(mixc(c, fog, 0.30), 1));
+  g.addColorStop(0.55, rgba(c,1));
+  g.addColorStop(1, rgba(mixc(c,[0,0,0],0.35),1));
+  cx.fillStyle = g;
+  cx.beginPath(); cx.moveTo(-2,H+2);
+  for (let x=-2;x<=W+2;x+=4){
+    const u=x/W;
+    let y = baseY + Math.sin(u*freq+phase)*amp + Math.sin(u*freq*2.37+phase*1.7)*amp*0.38
+                  + Math.sin(u*freq*5.1+phase*0.6)*amp*0.14;
+    if (jag) y -= Math.abs(Math.sin(u*freq*1.6+phase*2.2))*amp*jag;
+    cx.lineTo(x,y);
+  }
+  cx.lineTo(W+2,H+2); cx.closePath(); cx.fill();
+  return u => baseY + Math.sin(u*freq+phase)*amp + Math.sin(u*freq*2.37+phase*1.7)*amp*0.38
+                    + Math.sin(u*freq*5.1+phase*0.6)*amp*0.14
+                    - (jag?Math.abs(Math.sin(u*freq*1.6+phase*2.2))*amp*jag:0);
+}
+
+function tower(tx, ty, hgt, night, ink){
+  const w = hgt*0.20;
+  cx.strokeStyle = rgba(ink,.95);
+  cx.lineWidth = Math.max(1.4, hgt*0.011); cx.lineCap='round';
+  cx.beginPath(); cx.moveTo(tx-w, ty); cx.lineTo(tx-w*0.16, ty-hgt);
+                  cx.moveTo(tx+w, ty); cx.lineTo(tx+w*0.16, ty-hgt); cx.stroke();
+  const N=9;
+  for (let i=0;i<N;i++){
+    const t0=i/N, t1=(i+1)/N, y0=ty-hgt*t0, y1=ty-hgt*t1;
+    const w0=w*(1-t0*0.84), w1=w*(1-t1*0.84);
+    cx.beginPath();
+    cx.moveTo(tx-w0,y0); cx.lineTo(tx+w1,y1);
+    cx.moveTo(tx+w0,y0); cx.lineTo(tx-w1,y1);
+    cx.moveTo(tx-w1,y1); cx.lineTo(tx+w1,y1);
+    cx.stroke();
+  }
+  cx.beginPath(); cx.moveTo(tx, ty-hgt); cx.lineTo(tx, ty-hgt*1.12); cx.stroke();
+  const blink = 0.4 + 0.6*Math.pow(Math.abs(Math.sin(sceneT*0.0016)),3);
+  const ly = ty-hgt*1.14;
+  const g = cx.createRadialGradient(tx,ly,0,tx,ly,hgt*0.17);
+  g.addColorStop(0,`rgba(255,88,68,${0.8*blink})`); g.addColorStop(1,'rgba(255,88,68,0)');
+  cx.fillStyle=g; cx.beginPath(); cx.arc(tx,ly,hgt*0.17,0,7); cx.fill();
+  cx.fillStyle=`rgba(255,158,138,${blink})`; cx.beginPath(); cx.arc(tx,ly,hgt*0.015,0,7); cx.fill();
+  return {x:tx, y:ly};
+}
+
+function waves(px, py, level, night){
+  const n=5;
+  for (let i=0;i<n;i++){
+    const phase = ((sceneT*0.00032 + i/n) % 1);
+    const r = phase * Math.max(W,H)*0.66;
+    const a = (1-phase)*(0.04 + level*0.26);
+    if (a<=0.002) continue;
+    cx.beginPath(); cx.arc(px,py,r,Math.PI*1.05,Math.PI*1.95);
+    cx.strokeStyle = night ? `rgba(150,235,205,${a})` : `rgba(255,255,255,${a*0.85})`;
+    cx.lineWidth = 1 + level*2.4; cx.stroke();
+  }
+}
+
+function house(hx, hy, s, night, ink){
+  cx.fillStyle = rgba(mixc(ink,[0,0,0],0.15),.97);
+  cx.beginPath();
+  cx.moveTo(hx-s, hy); cx.lineTo(hx-s, hy-s*0.70); cx.lineTo(hx, hy-s*1.26);
+  cx.lineTo(hx+s, hy-s*0.70); cx.lineTo(hx+s, hy); cx.closePath(); cx.fill();
+  cx.fillStyle = rgba(mixc(ink,[0,0,0],0.35),1);
+  cx.fillRect(hx+s*0.42, hy-s*1.05, s*0.20, s*0.42);           // chaminé
+  const warm = 0.6+0.4*Math.sin(sceneT*0.0009);
+  cx.fillStyle = `rgba(255,198,112,${night?0.95:0.55})`;
+  cx.fillRect(hx-s*0.24, hy-s*0.56, s*0.48, s*0.36);
+  cx.strokeStyle = rgba(mixc(ink,[0,0,0],0.4),.9); cx.lineWidth=Math.max(1,s*0.035);
+  cx.beginPath(); cx.moveTo(hx,hy-s*0.56); cx.lineTo(hx,hy-s*0.20); cx.stroke();
+  if (night){
+    const g = cx.createRadialGradient(hx,hy-s*0.4,0,hx,hy-s*0.4,s*2.6);
+    g.addColorStop(0,`rgba(255,182,92,${0.17*warm})`); g.addColorStop(1,'rgba(255,182,92,0)');
+    cx.fillStyle=g; cx.beginPath(); cx.arc(hx,hy-s*0.4,s*2.6,0,7); cx.fill();
+  }
+}
+
+function tree(x, y, s, kind, ink, sway){
+  cx.fillStyle = rgba(ink,.97);
+  cx.fillRect(x-s*0.045, y-s*0.5, s*0.09, s*0.5);
+  if (kind===0){                       // pinheiro
+    for (let i=0;i<4;i++){
+      const yy=y-s*(0.42+i*0.22), ww=s*(0.40-i*0.085), sw=sway*(i+1)*0.35;
+      cx.beginPath(); cx.moveTo(x-ww+sw*0.4, yy); cx.lineTo(x+sw, yy-s*0.34);
+      cx.lineTo(x+ww+sw*0.4, yy); cx.closePath(); cx.fill();
+    }
+  } else {                             // copa redonda
+    for (let i=0;i<5;i++){
+      const a=i/5*Math.PI*2;
+      cx.beginPath();
+      cx.ellipse(x+Math.cos(a)*s*0.17+sway, y-s*0.72+Math.sin(a)*s*0.13, s*0.26, s*0.21, 0,0,7);
+      cx.fill();
+    }
+  }
+}
+
+function drawScene(ts){
+  if (!sceneOn) return;
+  sceneT = ts;
+  const h = hourMode==='auto' ? (new Date().getHours()+new Date().getMinutes()/60) : +hourMode;
+  const P = palette(h);
+  const night = P.amb < 0.4;
+  const fog = P.low;                                  // cor do horizonte = névoa
+  const ink = mixc(P.gnd,[0,0,0], night?0.62:0.55);   // silhuetas
+
+  /* céu */
+  const sky = cx.createLinearGradient(0,0,0,H*0.82);
+  sky.addColorStop(0,rgba(P.top,1)); sky.addColorStop(0.58,rgba(P.mid,1)); sky.addColorStop(1,rgba(P.low,1));
+  cx.fillStyle=sky; cx.fillRect(0,0,W,H);
+
+  /* estrelas + faixa da via láctea */
+  if (P.amb < 0.62){
+    const a0 = (0.62-P.amb)/0.62;
+    cx.save();
+    const mw = cx.createLinearGradient(W*0.15,0,W*0.85,H*0.6);
+    mw.addColorStop(0,'rgba(255,255,255,0)');
+    mw.addColorStop(0.5,`rgba(190,205,255,${0.045*a0})`);
+    mw.addColorStop(1,'rgba(255,255,255,0)');
+    cx.fillStyle=mw; cx.fillRect(0,0,W,H*0.72);
+    cx.restore();
+    for (const s of stars){
+      const tw = 0.45+0.55*Math.sin(ts*0.001*s.s+s.p);
+      cx.fillStyle=`rgba(255,255,238,${a0*tw*0.92})`;
+      cx.beginPath(); cx.arc(s.x*W, s.y*H, s.r, 0,7); cx.fill();
+    }
+  }
+
+  /* sol ou lua */
+  const dayT = Math.max(0, Math.min(1,(h-6)/12));
+  if (h>5.4 && h<18.8){
+    const bx=W*(0.10+dayT*0.80), by=H*(0.62-Math.sin(dayT*Math.PI)*0.46);
+    const g=cx.createRadialGradient(bx,by,0,bx,by,H*0.34);
+    g.addColorStop(0,'rgba(255,246,220,.9)'); g.addColorStop(0.14,'rgba(255,226,168,.32)');
+    g.addColorStop(1,'rgba(255,212,146,0)');
+    cx.fillStyle=g; cx.beginPath(); cx.arc(bx,by,H*0.34,0,7); cx.fill();
+    cx.fillStyle='rgba(255,251,236,.97)'; cx.beginPath(); cx.arc(bx,by,H*0.027,0,7); cx.fill();
+  } else {
+    const mx=W*0.78, my=H*0.16, mr=H*0.030;
+    const g=cx.createRadialGradient(mx,my,0,mx,my,H*0.24);
+    g.addColorStop(0,'rgba(214,228,255,.30)'); g.addColorStop(1,'rgba(200,220,255,0)');
+    cx.fillStyle=g; cx.beginPath(); cx.arc(mx,my,H*0.24,0,7); cx.fill();
+    cx.fillStyle='rgba(240,245,255,.96)'; cx.beginPath(); cx.arc(mx,my,mr,0,7); cx.fill();
+    cx.fillStyle='rgba(206,216,236,.55)';                 // crateras
+    cx.beginPath(); cx.arc(mx-mr*0.30,my-mr*0.22,mr*0.22,0,7); cx.fill();
+    cx.beginPath(); cx.arc(mx+mr*0.28,my+mr*0.10,mr*0.16,0,7); cx.fill();
+    cx.beginPath(); cx.arc(mx-mr*0.05,my+mr*0.42,mr*0.13,0,7); cx.fill();
+  }
+
+  /* nuvens (borradas) */
+  cx.save(); cx.filter = 'blur('+Math.max(6,H*0.014)+'px)';
+  for (const c of clouds){
+    c.x += c.v*16; if (c.x>1.3) c.x=-0.3;
+    const cxp=c.x*W, cyp=c.y*H, cw=c.w*W;
+    cx.fillStyle = night ? `rgba(150,165,195,${c.o*0.30})` : `rgba(255,255,255,${c.o*0.95})`;
+    cx.beginPath();
+    for (let i=0;i<6;i++){
+      const ox=(i-2.5)*cw*0.20, oy=Math.sin(i*1.9+c.p0)*cw*0.05;
+      cx.ellipse(cxp+ox, cyp+oy, cw*(0.30-Math.abs(i-2.5)*0.045), cw*0.095, 0,0,7);
+    }
+    cx.fill();
+  }
+  cx.restore();
+
+  /* pássaros de dia */
+  if (!night){
+    cx.strokeStyle=rgba(mixc(ink,fog,0.35),.55); cx.lineWidth=1.4;
+    for (const b of birds){
+      b.x += b.v*16; if (b.x>1.1) b.x=-0.1;
+      const bxp=b.x*W, byp=b.y*H+Math.sin(ts*0.0007+b.p)*8, s=6, f=Math.sin(ts*0.006+b.p)*3;
+      cx.beginPath(); cx.moveTo(bxp-s,byp+f); cx.quadraticCurveTo(bxp,byp-3,bxp+s,byp+f); cx.stroke();
+    }
+  }
+
+  /* névoa do horizonte */
+  const hz = cx.createLinearGradient(0,H*0.48,0,H*0.80);
+  hz.addColorStop(0,rgba(fog,0)); hz.addColorStop(1,rgba(fog,night?0.32:0.62));
+  cx.fillStyle=hz; cx.fillRect(0,H*0.46,W,H*0.36);
+
+  /* relevo: 4 camadas, cada uma menos lavada pela névoa */
+  ridge(H*0.585, H*0.055, 4.2, 1.15, P.gnd, fog, 0.72, 0.55);
+  ridge(H*0.645, H*0.045, 2.9, 3.85, P.gnd, fog, 0.52, 0.35);
+  ridge(H*0.700, H*0.036, 5.6, 0.35, P.gnd, fog, 0.34, 0.15);
+  const baseY=H*0.760, amp=H*0.030;
+  const yAt = ridge(baseY, amp, 2.1, 0.8, P.gnd, fog, 0.16, 0);
+
+  /* torre */
+  const towerX = W*0.30, towerY = yAt(0.30);
+  const stMine = currentMine();
+  const live = stMine && !audio.paused && S.current && S.current.stationuuid===stMine.stationuuid;
+  waves(towerX, towerY-H*0.30*1.14, live?S.level:0.05, night);
+  tower(towerX, towerY, H*0.30, night, ink);
+
+  /* bosque + casa */
+  const sway = Math.sin(ts*0.0011)*2.2 + (amb.state.wind?Math.sin(ts*0.0031)*3.2:0);
+  for (const t of forest){
+    const y = yAt(t.u);
+    tree(t.u*W, y+1, H*t.s, t.k, mixc(ink, fog, t.u<0.5?0.10:0.05), sway*t.s*14);
+  }
+  house(W*0.63, yAt(0.63)+1, H*0.050, night, ink);
+
+  /* campo da frente */
+  const fg = cx.createLinearGradient(0,H*0.86,0,H);
+  fg.addColorStop(0, rgba(mixc(P.gnd,[0,0,0],night?0.55:0.42),1));
+  fg.addColorStop(1, rgba(mixc(P.gnd,[0,0,0],night?0.78:0.62),1));
+  cx.fillStyle=fg;
+  cx.beginPath(); cx.moveTo(0,H);
+  for (let x=0;x<=W;x+=6){ const u=x/W; cx.lineTo(x, H*0.905 + Math.sin(u*1.5+2.4)*H*0.016); }
+  cx.lineTo(W,H); cx.closePath(); cx.fill();
+
+  /* capim */
+  cx.lineWidth=1.3;
+  for (let i=0;i<230;i++){
+    const u=i/230, x=u*W+Math.sin(i*12.9)*7;
+    const y=H*0.905+Math.sin(u*1.5+2.4)*H*0.016 + (i%3)*6 + 4;
+    const sw=Math.sin(ts*0.0013+i*0.6)*(4+(amb.state.wind?5:0));
+    cx.strokeStyle = rgba(mixc(P.gnd,[0,0,0], night?0.42:0.28), .55+((i%4)*0.08));
+    cx.beginPath(); cx.moveTo(x,y); cx.quadraticCurveTo(x+sw*0.5,y-16,x+sw,y-30); cx.stroke();
+  }
+  if (!night){                       /* florzinhas */
+    for (let i=0;i<26;i++){
+      const u=(i*0.0381)%1, x=u*W+Math.sin(i*7.1)*20;
+      const y=H*0.905+Math.sin(u*1.5+2.4)*H*0.016+18+(i%4)*7;
+      cx.fillStyle = i%3===0?'rgba(240,226,150,.5)':'rgba(232,214,224,.42)';
+      cx.beginPath(); cx.arc(x,y,2.1,0,7); cx.fill();
+    }
+  }
+
+  /* vagalumes */
+  if (night){
+    for (const f of flies){
+      f.p += 0.012*f.s;
+      const fx=(f.x+Math.sin(f.p*0.7)*0.012)*W, fy=(f.y+Math.cos(f.p)*0.010)*H;
+      const a=Math.max(0,Math.sin(f.p*1.3))*0.85;
+      const g=cx.createRadialGradient(fx,fy,0,fx,fy,f.r*8);
+      g.addColorStop(0,`rgba(216,255,162,${a})`); g.addColorStop(1,'rgba(216,255,162,0)');
+      cx.fillStyle=g; cx.beginPath(); cx.arc(fx,fy,f.r*8,0,7); cx.fill();
+    }
+  }
+
+  /* chuva */
+  if (amb.state.rain){
+    cx.strokeStyle='rgba(186,210,235,.28)'; cx.lineWidth=1; cx.beginPath();
+    for (const d of drops){
+      d.y+=d.v; d.x+=d.v*0.16;
+      if (d.y>1){ d.y=-0.05; d.x=Math.random(); }
+      cx.moveTo(d.x*W,d.y*H); cx.lineTo(d.x*W-W*0.004, d.y*H+d.l*H);
+    }
+    cx.stroke();
+  }
+
+  /* vinheta */
+  const v=cx.createRadialGradient(W/2,H*0.55,H*0.30,W/2,H*0.55,H*0.98);
+  v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,0,0,.46)');
+  cx.fillStyle=v; cx.fillRect(0,0,W,H);
+
+  requestAnimationFrame(drawScene);
+}
+
+function currentMine(){
+  if (S.current && S.current.mine) return S.current;
+  return S.stations.find(s=>s.mine) || null;
+}
+
+/* ------------------------------------------ ambiente sintetizado */
+const amb = (function(){
+  let AC = null; const nodes = {}; const state = {rain:false, wind:false, fire:false, crickets:false};
+  let fireTimer = null, criTimer = null;
+
+  function ctx(){
+    if (!AC) AC = new (window.AudioContext||window.webkitAudioContext)();
+    if (AC.state === 'suspended') AC.resume();
+    return AC;
+  }
+  function noise(ac, sec=2){
+    const b = ac.createBuffer(1, ac.sampleRate*sec, ac.sampleRate);
+    const d = b.getChannelData(0);
+    let last = 0;
+    for (let i=0;i<d.length;i++){
+      const w = Math.random()*2-1;
+      last = (last + 0.02*w)/1.02; d[i] = last*3.2;   // brown-ish
+    }
+    const src = ac.createBufferSource(); src.buffer=b; src.loop=true; return src;
+  }
+  function white(ac, sec=2){
+    const b = ac.createBuffer(1, ac.sampleRate*sec, ac.sampleRate);
+    const d = b.getChannelData(0);
+    for (let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
+    const src = ac.createBufferSource(); src.buffer=b; src.loop=true; return src;
+  }
+
+  function on(kind){
+    const ac = ctx();
+    if (kind==='rain'){
+      const s = white(ac), bp = ac.createBiquadFilter(), hp = ac.createBiquadFilter(), g = ac.createGain();
+      bp.type='bandpass'; bp.frequency.value=1400; bp.Q.value=0.45;
+      hp.type='highpass'; hp.frequency.value=420;
+      g.gain.value=0.16;
+      s.connect(bp); bp.connect(hp); hp.connect(g); g.connect(ac.destination); s.start();
+      nodes.rain = {s,g};
+    }
+    if (kind==='wind'){
+      const s = noise(ac), lp = ac.createBiquadFilter(), g = ac.createGain();
+      lp.type='lowpass'; lp.frequency.value=380; lp.Q.value=2.5;
+      g.gain.value=0.30;
+      const lfo = ac.createOscillator(), lg = ac.createGain();
+      lfo.frequency.value=0.06; lg.gain.value=220;
+      lfo.connect(lg); lg.connect(lp.frequency); lfo.start();
+      s.connect(lp); lp.connect(g); g.connect(ac.destination); s.start();
+      nodes.wind = {s,g,lfo};
+    }
+    if (kind==='fire'){
+      const s = noise(ac), lp = ac.createBiquadFilter(), g = ac.createGain();
+      lp.type='lowpass'; lp.frequency.value=520; g.gain.value=0.22;
+      s.connect(lp); lp.connect(g); g.connect(ac.destination); s.start();
+      nodes.fire = {s,g};
+      fireTimer = setInterval(()=>{                       // estalos
+        const c = white(ac,0.2), cg = ac.createGain(), cf = ac.createBiquadFilter();
+        cf.type='bandpass'; cf.frequency.value = 900+Math.random()*2600; cf.Q.value=2;
+        const t = ac.currentTime;
+        cg.gain.setValueAtTime(0.0001,t);
+        cg.gain.exponentialRampToValueAtTime(0.10+Math.random()*0.14, t+0.006);
+        cg.gain.exponentialRampToValueAtTime(0.0001, t+0.07+Math.random()*0.10);
+        c.connect(cf); cf.connect(cg); cg.connect(ac.destination); c.start(); c.stop(t+0.25);
+      }, 240);
+    }
+    if (kind==='crickets'){
+      const g = ac.createGain(); g.gain.value=0.0; g.connect(ac.destination);
+      nodes.crickets = {g};
+      criTimer = setInterval(()=>{
+        const o = ac.createOscillator(), og = ac.createGain(), f = ac.createBiquadFilter();
+        o.type='square'; o.frequency.value = 3900 + Math.random()*900;
+        f.type='bandpass'; f.frequency.value=o.frequency.value; f.Q.value=14;
+        const t = ac.currentTime;
+        og.gain.setValueAtTime(0.0001,t);
+        for (let k=0;k<3;k++){                              // trinado
+          og.gain.exponentialRampToValueAtTime(0.030, t+0.02+k*0.055);
+          og.gain.exponentialRampToValueAtTime(0.0004, t+0.045+k*0.055);
+        }
+        o.connect(f); f.connect(og); og.connect(ac.destination); o.start(); o.stop(t+0.30);
+      }, 620);
+    }
+    state[kind] = true;
+  }
+  function off(kind){
+    const n = nodes[kind];
+    if (n){ try{ n.s && n.s.stop(); n.lfo && n.lfo.stop(); }catch(e){} delete nodes[kind]; }
+    if (kind==='fire' && fireTimer){ clearInterval(fireTimer); fireTimer=null; }
+    if (kind==='crickets' && criTimer){ clearInterval(criTimer); criTimer=null; }
+    state[kind] = false;
+  }
+  return {
+    state,
+    toggle(kind){ state[kind] ? off(kind) : on(kind); return state[kind]; },
+    allOff(){ Object.keys(state).forEach(k => state[k] && off(k)); syncAmbUI(); }
+  };
+})();
+
+function syncAmbUI(){
+  $$('[data-amb]').forEach(b => b.classList.toggle('on', !!amb.state[b.dataset.amb]));
+}
+$$('[data-amb]').forEach(b => b.onclick = ()=>{ amb.toggle(b.dataset.amb); syncAmbUI(); });
+$$('[data-hour]').forEach(b => b.onclick = ()=>{
+  hourMode = b.dataset.hour;
+  $$('[data-hour]').forEach(x => x.classList.toggle('on', x===b));
+});
+$$('[data-sleep]').forEach(b => b.onclick = ()=>{
+  const m = +b.dataset.sleep;
+  S.sleepAt = m ? Date.now()+m*60000 : 0;
+  $$('[data-sleep]').forEach(x => x.classList.toggle('on', x===b));
+  toast(m ? `desligo tudo em ${m} minutos` : 'temporizador desligado');
+});
+
+
+/* -------------------------- abrir/fechar cena -------------------------- */
+function openScene(){
+  const mine=currentMine();
+  if (!mine){ openTab('p-minha'); toast(t('tFirstRadio')); return; }
+  sceneOn=true; $('#scene').classList.add('on'); resizeScene();
+  syncSceneUI(); syncAmbUI(); requestAnimationFrame(drawScene);
+}
+function closeScene(){ sceneOn=false; $('#scene').classList.remove('on'); setTimeout(()=>map.invalidateSize(),120); }
+$('#bScene').onclick = openScene;
+$('#scClose').onclick = closeScene;
+$('#scPlay').onclick = ()=>{
+  const mine=currentMine(); if(!mine) return;
+  if (S.current && S.current.stationuuid===mine.stationuuid) togglePlay(); else playStation(mine);
+};
+$('#scVol').oninput = e=>{ audio.volume=e.target.value/100; $('#vol').value=e.target.value; };
+function syncSceneUI(){
+  const mine=currentMine(); if(!mine) return;
+  $('#scName').textContent=mine.name;
+  $('#scKicker').textContent=(mine.country&&mine.country!=='sua rádio')?mine.country:t('yourStation');
+  const live=S.current&&S.current.stationuuid===mine.stationuuid&&!audio.paused;
+  const air=$('#scAir');
+  air.classList.toggle('live',!!live);
+  air.querySelector('span').textContent = live?t('onAirT'):t('offAirT');
+  $('#scPlay').textContent = live?t('turnOff'):t('turnOn');
+  $('#scPlay').classList.toggle('on',!!live);
+  $('#scNow').textContent = S.current
+    ? (S.current.stationuuid===mine.stationuuid ? mine.name+' — '+t('yourTransm')
+       : S.current.name+' · '+(S.current.country||'')) : '—';
+}
+
+/* ======================================================================
+   VISUALIZADOR — tela cheia, estilo protetor de tela
+   ====================================================================== */
+const vz = $('#vizc'), vx = vz.getContext('2d');
+let vizOn=false, vizT=0, VW=0, VH=0, uiTimer=null;
+const vparts=[], vash=[];
+for (let i=0;i<140;i++) vparts.push({a:Math.random()*Math.PI*2, r:Math.random(), s:0.2+Math.random()*1.4,
+                                     h:Math.random()});
+for (let i=0;i<180;i++) vash.push({x:Math.random(), y:Math.random(), v:0.0004+Math.random()*0.0018,
+                                   d:Math.random()*Math.PI*2, r:0.5+Math.random()*2.2});
+
+function resizeViz(){
+  const d=Math.min(2,window.devicePixelRatio||1);
+  VW=vz.clientWidth; VH=vz.clientHeight;
+  vz.width=VW*d; vz.height=VH*d;
+  vx.setTransform(d,0,0,d,0,0);
+}
+window.addEventListener('resize',()=>{ if(vizOn) resizeViz(); });
+
+const HUES = {waves:[28,320,190], rings:[320,28,265], scope:[150,190,28],
+              aurora:[265,190,320], tunnel:[28,320,190], ash:[28,20,265]};
+/* interpola circularmente entre os três matizes do modo */
+function hueAt(t){
+  const H=HUES[S.vizMode]||HUES.waves;
+  const x=((t%1)+1)%1, i=Math.floor(x*3), f=x*3-i;
+  const a=H[i], b=H[(i+1)%3];
+  let d=b-a; if (d>180) d-=360; if (d<-180) d+=360;
+  return ((a+d*f)%360+360)%360;
+}
+
+function drawViz(ts){
+  if (!vizOn) return;
+  vizT=ts;
+  const L=S.level, on=!audio.paused&&S.current;
+  const [h1,h2,h3]=HUES[S.vizMode]||HUES.waves;
+  const drift=(ts*0.004)%360;
+
+  /* rastro: em vez de limpar, escurece — dá cauda ao movimento */
+  vx.fillStyle=`rgba(3,2,6,${S.vizMode==='scope'?0.16:0.13})`;
+  vx.fillRect(0,0,VW,VH);
+  vx.save();
+  vx.globalCompositeOperation='lighter';
+
+  if (S.vizMode==='waves'){
+    for (let k=0;k<7;k++){
+      const amp=VH*(0.045+0.10*L)*(1+k*0.34);
+      const y0=VH*0.5, hue=hueAt(k/7 + ts*0.00004);
+      vx.strokeStyle=`hsla(${hue},92%,${58-k*3}%,${0.42-k*0.045})`;
+      vx.lineWidth=2.4-k*0.22;
+      vx.beginPath();
+      for (let x=0;x<=VW;x+=5){
+        const u=x/VW;
+        const y=y0 + Math.sin(u*7.2+ts*0.0011+k*0.7)*amp
+                   + Math.sin(u*17.5-ts*0.0016+k)*amp*0.34*(0.4+L)
+                   + Math.sin(u*3.1+ts*0.0005)*amp*0.5;
+        x?vx.lineTo(x,y):vx.moveTo(x,y);
+      }
+      vx.stroke();
+    }
+  }
+
+  else if (S.vizMode==='rings'){
+    const cxp=VW/2, cyp=VH/2;
+    for (let k=0;k<14;k++){
+      const ph=((ts*0.00016+k/14)%1);
+      const r=ph*Math.max(VW,VH)*0.72;
+      const a=(1-ph)*(0.10+L*0.42);
+      vx.strokeStyle=`hsla(${hueAt(k/14 + ts*0.00005)},95%,60%,${a})`;
+      vx.lineWidth=1+L*4;
+      vx.beginPath();
+      for (let i=0;i<=72;i++){
+        const t=i/72*Math.PI*2;
+        const wob=1+Math.sin(t*6+ts*0.002+k)*0.05*(0.3+L)+S.bands[i%24]*0.09;
+        const x=cxp+Math.cos(t)*r*wob, y=cyp+Math.sin(t)*r*wob*0.82;
+        i?vx.lineTo(x,y):vx.moveTo(x,y);
+      }
+      vx.closePath(); vx.stroke();
+    }
+  }
+
+  else if (S.vizMode==='scope'){
+    const y0=VH*0.5;
+    for (let k=0;k<3;k++){
+      vx.strokeStyle=`hsla(${(h1+k*40+drift)%360},95%,${62-k*8}%,${0.75-k*0.22})`;
+      vx.lineWidth=k?1.4:2.6;
+      vx.beginPath();
+      for (let x=0;x<=VW;x+=3){
+        const i=Math.floor(x/VW*S.bands.length);
+        const n=(S.bands[i]||0.1);
+        const y=y0 + Math.sin(x*0.045+ts*0.006+k*1.6)*VH*0.20*n*(0.5+L)
+                   + (Math.random()-0.5)*VH*0.012*n;
+        x?vx.lineTo(x,y+k*3):vx.moveTo(x,y+k*3);
+      }
+      vx.stroke();
+    }
+    /* barras espelhadas embaixo */
+    const bw=VW/S.bands.length;
+    for (let i=0;i<S.bands.length;i++){
+      const hgt=S.bands[i]*VH*0.30;
+      vx.fillStyle=`hsla(${hueAt(i/S.bands.length*0.6)},95%,58%,.32)`;
+      vx.fillRect(i*bw+bw*0.15, VH-hgt, bw*0.7, hgt);
+    }
+  }
+
+  else if (S.vizMode==='aurora'){
+    for (let k=0;k<4;k++){
+      const off = VH*(0.30+k*0.13);
+      const hue = hueAt(k/4 + ts*0.00006);
+      const g=vx.createLinearGradient(0,off-VH*0.22,0,off+VH*0.26);
+      g.addColorStop(0,`hsla(${hue},92%,64%,0)`);
+      g.addColorStop(0.42,`hsla(${hue},92%,58%,${0.045+L*0.075})`);
+      g.addColorStop(1,`hsla(${(hue+45)%360},92%,50%,0)`);
+      vx.fillStyle=g;
+      vx.beginPath(); vx.moveTo(0,off+VH*0.30);
+      for (let x=0;x<=VW;x+=8){
+        const u=x/VW;
+        const y=off + Math.sin(u*4.1+ts*0.00042+k*1.7)*VH*0.10*(0.5+L)
+                    + Math.sin(u*9.7-ts*0.00071+k)*VH*0.045;
+        vx.lineTo(x,y);
+      }
+      vx.lineTo(VW,off+VH*0.30); vx.closePath(); vx.fill();
+    }
+    for (const p of vparts){
+      p.r += 0.0012*p.s*(0.4+L);
+      if (p.r>1){ p.r=0; p.a=Math.random()*Math.PI*2; }
+      const x=VW*0.5+Math.cos(p.a)*p.r*VW*0.6, y=VH*0.45+Math.sin(p.a)*p.r*VH*0.5;
+      vx.fillStyle=`hsla(${hueAt(p.h)},95%,72%,${(1-p.r)*0.42})`;
+      vx.beginPath(); vx.arc(x,y,1.4+p.s,0,7); vx.fill();
+    }
+  }
+
+  else if (S.vizMode==='tunnel'){
+    const cxp=VW/2+Math.sin(ts*0.0004)*VW*0.06, cyp=VH/2+Math.cos(ts*0.0005)*VH*0.06;
+    for (let k=0;k<26;k++){
+      const ph=((ts*0.00022+k/26)%1);
+      const r=Math.pow(ph,2.1)*Math.max(VW,VH)*0.95;
+      const a=(1-ph)*(0.14+L*0.34);
+      const sides=6;
+      vx.strokeStyle=`hsla(${hueAt(k/26 + ts*0.00008)},96%,60%,${a})`;
+      vx.lineWidth=1+L*3;
+      vx.beginPath();
+      for (let i=0;i<=sides;i++){
+        const t=i/sides*Math.PI*2 + ph*1.6 + ts*0.0004;
+        const x=cxp+Math.cos(t)*r, y=cyp+Math.sin(t)*r*0.9;
+        i?vx.lineTo(x,y):vx.moveTo(x,y);
+      }
+      vx.closePath(); vx.stroke();
+    }
+  }
+
+  else if (S.vizMode==='ash'){
+    for (const p of vash){
+      p.y -= p.v*(0.4+L*1.8); p.d += 0.01;
+      p.x += Math.sin(p.d)*0.0007;
+      if (p.y<-0.05){ p.y=1.05; p.x=Math.random(); }
+      const x=p.x*VW, y=p.y*VH;
+      const a=(0.18+L*0.5)*(0.4+0.6*Math.sin(p.d*0.7));
+      vx.fillStyle=`hsla(${hueAt(p.r/3)},90%,${58+p.r*8}%,${Math.max(0,a)})`;
+      vx.beginPath(); vx.arc(x,y,p.r*(1+L),0,7); vx.fill();
+    }
+    const g=vx.createRadialGradient(VW/2,VH*1.05,0,VW/2,VH*1.05,VH*0.9);
+    g.addColorStop(0,`hsla(${h1},95%,55%,${0.05+L*0.10})`); g.addColorStop(1,'hsla(0,0%,0%,0)');
+    vx.fillStyle=g; vx.fillRect(0,0,VW,VH);
+  }
+
+  vx.restore();
+
+  /* varredura horizontal fantasma */
+  const sy=(ts*0.06)%VH;
+  const sg=vx.createLinearGradient(0,sy-60,0,sy+60);
+  sg.addColorStop(0,'rgba(255,255,255,0)');
+  sg.addColorStop(0.5,`rgba(255,255,255,${0.012+L*0.020})`);
+  sg.addColorStop(1,'rgba(255,255,255,0)');
+  vx.fillStyle=sg; vx.fillRect(0,sy-60,VW,120);
+
+  /* vinheta */
+  const v=vx.createRadialGradient(VW/2,VH/2,VH*0.25,VW/2,VH/2,VH*1.0);
+  v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,0,0,.72)');
+  vx.fillStyle=v; vx.fillRect(0,0,VW,VH);
+
+  if (!on){
+    vx.fillStyle='rgba(3,2,6,.05)'; vx.fillRect(0,0,VW,VH);
+  }
+  requestAnimationFrame(drawViz);
+}
+
+function openViz(){
+  vizOn=true; $('#viz').classList.add('on'); resizeViz();
+  vx.fillStyle='#030206'; vx.fillRect(0,0,VW,VH);
+  syncVizUI(); showVizUI();
+  requestAnimationFrame(drawViz);
+  if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(()=>{});
+}
+function closeViz(){
+  vizOn=false; $('#viz').classList.remove('on');
+  if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(()=>{});
+}
+function showVizUI(){
+  $('#viz').classList.add('showui');
+  clearTimeout(uiTimer);
+  uiTimer=setTimeout(()=>$('#viz').classList.remove('showui'),3000);
+}
+function syncVizUI(){
+  const st=S.current;
+  const nm=st?st.name:t('noSignal');
+  $('#vzName').textContent=nm; $('#vzNameP').textContent=nm;
+  $('#vzSub').textContent = st
+    ? [st.mine?t('yourRadio'):(st.remote?t('radioOf')+' '+(st.by||t('somebody')):st.country), st.state,
+       st.codec, st.bitrate?st.bitrate+' kbps':''].filter(Boolean).join('  ·  ')
+    : t('chooseHint');
+  $$('[data-viz]').forEach(b=>b.classList.toggle('on', b.dataset.viz===S.vizMode));
+  const vb=$('#vzBeat');
+  if (vb){ vb.textContent = realBeat?t('realBeat'):t('simBeat'); vb.classList.toggle('on', realBeat); }
+}
+$('#vzBeat').onclick = async ()=>{
+  const vb=$('#vzBeat');
+  if (realBeat){ stopRealBeat(); return; }
+  vb.textContent='…';
+  const ok = await startRealBeat();
+  syncVizUI();
+  if (!ok) toast(t('simBeat'));
+};
+$('#bViz').onclick=openViz;
+$('#vzClose').onclick=closeViz;
+$('#vzPlay').onclick=togglePlay;
+$('#vzNext').onclick=()=>nextStation();
+$('#vzPrev').onclick=prevStation;
+$$('[data-viz]').forEach(b=>b.onclick=()=>{ S.vizMode=b.dataset.viz; save('viz',S.vizMode); syncVizUI(); });
+$('#viz').addEventListener('mousemove',showVizUI);
+$('#viz').addEventListener('click',showVizUI);
+document.addEventListener('fullscreenchange',()=>{ if(!document.fullscreenElement && vizOn) closeViz(); });
+
+/* ------------------------------- teclado ------------------------------- */
+document.onkeydown = e=>{
+  if (/input|textarea/i.test(e.target.tagName)) return;
+  if (e.code==='Space'){ e.preventDefault(); togglePlay(); }
+  else if (e.key==='n') nextStation();
+  else if (e.key==='b') prevStation();
+  else if (e.key==='s') toggleSync();
+  else if (e.key==='r') sceneOn?closeScene():openScene();
+  else if (e.key==='f') vizOn?closeViz():openViz();
+  else if (e.key==='g') openTab('p-global');
+  else if (e.key==='Escape'){ if(vizOn) closeViz(); else if(sceneOn) closeScene(); }
+  else if (e.key==='/'){ e.preventDefault(); $('#q').focus(); }
+};
+
+/* ------------------- avisos: nova versão e recado do autor ------------------- */
+/* Cole aqui a SUA chave pública (o ⧉ na aba "minha" copia a sua) para poder
+   mandar recados que aparecem no topo do app de todo mundo. Vazio = desligado. */
+const AUTHOR_PUBKEY = '';
+const NEWS_TAG = 'aftersignal-news';
+
+function showNotice(label, text, action){
+  const n=$('#notice');
+  n.hidden=false;
+  n.innerHTML = `<b>${esc(label)}</b><span>${esc(text)}</span>`+
+    (action?`<span class="go" id="ntGo">${esc(action.label)}</span>`:'')+
+    `<span class="x" id="ntX">✕</span>`;
+  $('#ntX').onclick=()=>{ n.hidden=true; };
+  if (action) $('#ntGo').onclick=action.fn;
+}
+function subNews(){
+  if (!AUTHOR_PUBKEY || AUTHOR_PUBKEY.length!==64) return;
+  NOSTR.sub('news',[{kinds:[NOSTR.K.chat], authors:[AUTHOR_PUBKEY], '#t':[NEWS_TAG], limit:1}], ev=>{
+    if (localStorage.getItem('as:newsSeen')===ev.id) return;
+    localStorage.setItem('as:newsSeen', ev.id);
+    showNotice('AFTER SIGNAL', String(ev.content||'').slice(0,220),
+      {label:'ok', fn:()=>{ $('#notice').hidden=true; }});
+  });
+}
+
+/* -------------------------------- início -------------------------------- */
+S.vizMode = load('viz','waves');
+$('#nick').value = (S.me==='anônimo'?'':S.me);
+$('#go').onclick = ()=>{
+  S.me = $('#nick').value.trim() || 'anônimo';
+  localStorage.setItem(LS('nick'), S.me);
+  $('#intro').remove();
+  boot(); subNews();
+};
+$('#nick').onkeydown = e=>{ if(e.key==='Enter') $('#go').click(); };
+setPlayIcon(false);
+applyStatic();
+renderStation(); renderRoom(); renderGlobal(); renderMural(); renderMinha(); syncVizUI();
+document.documentElement.lang = LANG;
+document.documentElement.dir = LANGS[LANG].rtl ? 'rtl' : 'ltr';
+
+/* PWA: instalável, offline, e avisa quando há versão nova publicada */
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  window.addEventListener('load', async ()=>{
+    try{
+      const reg = await navigator.serviceWorker.register('sw.js');
+      reg.addEventListener('updatefound', ()=>{
+        const nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener('statechange', ()=>{
+          if (nw.state==='installed' && navigator.serviceWorker.controller){
+            showNotice('AFTER SIGNAL', 'nova versão disponível',
+              {label:'recarregar', fn:()=>{ nw.postMessage({type:'SKIP_WAITING'}); location.reload(); }});
+          }
+        });
+      });
+      setInterval(()=>reg.update().catch(()=>{}), 30*60*1000);   // procura versão nova a cada 30 min
+    }catch(e){}
+  });
+}
+</script>
+</body>
+</html>
