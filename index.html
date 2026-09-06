@@ -354,7 +354,7 @@
     <button class="chip mint" id="fMine" data-i18n="fPersonal">pessoais</button>
     <button class="chip mag" id="bScene" data-i18n="fTower">torre</button>
     <div id="signal" title="relays — a rede paralela"><span class="dots"><i></i><i></i><i></i><i></i></span><span id="sigTx" data-i18n="noSignal">sem sinal</span></div>
-    <div id="counters" title="quem está no ar e quem já passou por aqui">
+    <div id="counters" title="à esquerda: pessoas com o app aberto agora. à direita: identidades distintas que este aparelho já viu passar.">
       <span id="cntLive">0</span><em id="cntLiveL">no ar</em>
       <span class="sep">·</span>
       <span id="cntSeen">0</span><em id="cntSeenL">já passaram</em>
@@ -1619,7 +1619,9 @@ function netStart(){
     sig.classList.toggle('live', up>0);
     $('#sigTx').textContent = up>0 ? up+'/'+total+' '+t('relaysN') : t('noSignal');
     sig.querySelectorAll('.dots i').forEach((d,i)=>d.classList.toggle('up', i<up));
+    updateCounters();
   });
+  setInterval(updateCounters, 5000);   // mantém a conta viva mesmo sem ninguém chegando
 
   /* quem está no ar */
   NOSTR.sub('presence',[{kinds:[NOSTR.K.presence],'#t':[NOSTR.tag],
@@ -1667,6 +1669,10 @@ function netStart(){
   });
 
   publishRadio();
+  let anunciado = false;
+  const anunciar = setInterval(()=>{
+    if (NOSTR.up() && !anunciado){ anunciado = true; pushPresence(); clearInterval(anunciar); }
+  }, 1500);
   setInterval(pushPresence, 45000);
   setInterval(()=>{                       // limpa quem sumiu
     const now=Date.now(); let ch=false;
