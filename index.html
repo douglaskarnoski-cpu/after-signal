@@ -115,6 +115,8 @@
 
   /* ---------- mapa ---------- */
   .leaflet-container{background:#050408;font-family:var(--sans)}
+  /* o mapa vem claro do OpenStreetMap e é escurecido aqui */
+  .leaflet-tile-pane{filter:invert(1) hue-rotate(192deg) brightness(.62) contrast(1.22) saturate(.32)}
   .leaflet-control-zoom a{background:#120e1c!important;color:var(--tx2)!important;border-color:var(--line)!important}
   .leaflet-control-attribution{background:rgba(5,4,8,.72)!important;color:#463d5c!important;font-size:9px}
   .leaflet-control-attribution a{color:#57496f!important}
@@ -1149,9 +1151,11 @@ async function api(path){
 
 /* ================================ MAPA ================================ */
 const map = L.map('map',{preferCanvas:true, worldCopyJump:true, minZoom:2, maxZoom:12}).setView([10,0],3);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',{
-  attribution:'&copy; OpenStreetMap &copy; CARTO · estações: Radio Browser · rede: Nostr',
-  subdomains:'abcd', maxZoom:12}).addTo(map);
+/* OpenStreetMap padrão, escurecido por filtro CSS: sem chave de API, sem
+   provedor que possa cortar o acesso amanhã. A atribuição é obrigatória. */
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  attribution:'&copy; OpenStreetMap · estações: Radio Browser · rede: Nostr',
+  maxZoom:12, crossOrigin:true}).addTo(map);
 const rend = L.canvas({padding:0.4});
 const layer = L.layerGroup().addTo(map);
 const players = L.layerGroup().addTo(map);
