@@ -2,6 +2,11 @@
 
 *o que sobrou no ar*
 
+![AFTER SIGNAL](promo.jpg)
+
+**No ar: [douglaskarnoski-cpu.github.io/after-signal](https://douglaskarnoski-cpu.github.io/after-signal/)**
+
+
 Por **Douglas Karnoski** — [github.com/douglaskarnoski-cpu](https://github.com/douglaskarnoski-cpu)
 · © 2026, todos os direitos reservados ([LICENSE](LICENSE))
 
